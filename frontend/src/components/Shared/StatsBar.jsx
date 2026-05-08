@@ -1,25 +1,42 @@
 import { useState, useEffect } from 'react'
 import { getStatsOverview } from '../../api'
 
-export default function StatsBar() {
+/**
+ * MSP overview stats — exactly four tiles.
+ *
+ * `refreshKey` is an optional prop the parent (PipelinePage) bumps whenever
+ * leads change so the bar re-fetches without us having to thread an event bus
+ * through the whole tree.
+ */
+export default function StatsBar({ refreshKey = 0 }) {
   const [stats, setStats] = useState({
-    total_leads: 0,
-    contacted_today: 0,
-    meetings_this_week: 0,
-    conversion_rate: 0
+    totalMsps: 0,
+    contactedThisWeek: 0,
+    discoveryCalls: 0,
+    conversionRate: 0,
   });
 
   useEffect(() => {
+    let cancelled = false;
     getStatsOverview()
-      .then(data => setStats(data))
+      .then(data => {
+        if (cancelled) return;
+        setStats({
+          totalMsps: data.totalMsps ?? 0,
+          contactedThisWeek: data.contactedThisWeek ?? 0,
+          discoveryCalls: data.discoveryCalls ?? 0,
+          conversionRate: data.conversionRate ?? 0,
+        });
+      })
       .catch(() => {});
-  }, []);
+    return () => { cancelled = true; };
+  }, [refreshKey]);
 
   const items = [
-    { label: 'Total Leads', value: stats.total_leads, color: 'var(--accent-primary)' },
-    { label: 'Contacted Today', value: stats.contacted_today, color: 'var(--color-info)' },
-    { label: 'Meetings This Week', value: stats.meetings_this_week, color: 'var(--color-success)' },
-    { label: 'Conversion Rate', value: `${stats.conversion_rate.toFixed(1)}%`, color: 'var(--color-warning)' },
+    { label: 'Total MSPs', value: stats.totalMsps, color: 'var(--accent-primary)' },
+    { label: 'Contacted This Week', value: stats.contactedThisWeek, color: 'var(--color-info)' },
+    { label: 'Discovery Calls', value: stats.discoveryCalls, color: 'var(--color-success)' },
+    { label: 'Conversion Rate', value: `${Number(stats.conversionRate || 0).toFixed(0)}%`, color: 'var(--color-warning)' },
   ];
 
   return (

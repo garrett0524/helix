@@ -8,10 +8,10 @@ function getDaysInStage(updatedAt) {
 function getCategoryIcon(category) {
   if (!category) return '?';
   const lower = category.toLowerCase();
-  if (lower.includes('bar') || lower.includes('pub') || lower.includes('tavern')) return 'B';
-  if (lower.includes('restaurant')) return 'R';
-  if (lower.includes('gym') || lower.includes('fitness') || lower.includes('crossfit')) return 'G';
-  if (lower.includes('yoga')) return 'Y';
+  if (lower.includes('isp')) return 'ISP';
+  if (lower.includes('msp')) return 'MSP';
+  if (lower.includes('wisp')) return 'WISP';
+  if (lower.includes('it')) return 'IT';
   return category.charAt(0).toUpperCase();
 }
 
@@ -34,9 +34,6 @@ export default function KanbanCard({ lead, stageColor, onDragStart, onDragEnd, o
         <span className="kanban-card-category">
           {getCategoryIcon(lead.category)} {lead.category || 'Unknown'}
         </span>
-        {lead.last_contact_method && lead.last_contact_method !== 'none' && (
-          <span>{lead.last_contact_method === 'call' ? 'Called' : 'Emailed'}</span>
-        )}
         <span className="kanban-card-days">{days}d</span>
       </div>
     </div>

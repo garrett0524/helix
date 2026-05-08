@@ -4,47 +4,52 @@ const { query } = require('../database/pg');
 const router = express.Router();
 
 // GET /api/stats/overview
+// Phase 5: MSP-focused metrics. Returns the four tiles the StatsBar renders
+// (totalMsps, contactedThisWeek, discoveryCalls, conversionRate) along with
+// a by_stage breakdown that other widgets may still consume.
 router.get('/overview', async (req, res) => {
   try {
     const { rows: [totalResult] } = await query('SELECT COUNT(*) as total FROM leads');
-    const total_leads = parseInt(totalResult?.total || 0);
+    const totalMsps = parseInt(totalResult?.total || 0);
 
-    const { rows: stageRows } = await query("SELECT pipeline_stage, COUNT(*) as count FROM leads GROUP BY pipeline_stage");
+    const { rows: stageRows } = await query(
+      "SELECT pipeline_stage, COUNT(*) as count FROM leads GROUP BY pipeline_stage"
+    );
     const by_stage = {};
     for (const row of stageRows) {
       by_stage[row.pipeline_stage] = parseInt(row.count);
     }
 
-    const { rows: [contactedResult] } = await query("SELECT COUNT(*) as count FROM leads WHERE last_contact_date >= CURRENT_DATE::text");
-    const contacted_today = parseInt(contactedResult?.count || 0);
+    const { rows: [contactedResult] } = await query(`
+      SELECT COUNT(*) as count
+      FROM leads
+      WHERE pipeline_stage IN (
+        'outreach_sent', 'responded', 'discovery_call',
+        'technical_review', 'contract_sent', 'onboarding', 'live'
+      )
+        AND updated_at >= NOW() - INTERVAL '7 days'
+    `);
+    const contactedThisWeek = parseInt(contactedResult?.count || 0);
 
-    const { rows: [meetingsResult] } = await query("SELECT COUNT(*) as count FROM leads WHERE pipeline_stage = 'discovery_call' AND updated_at >= NOW() - INTERVAL '7 days'");
-    const meetings_this_week = parseInt(meetingsResult?.count || 0);
+    const { rows: [discoveryResult] } = await query(
+      "SELECT COUNT(*) as count FROM leads WHERE pipeline_stage = 'discovery_call'"
+    );
+    const discoveryCalls = parseInt(discoveryResult?.count || 0);
 
-    const conversion_rate = total_leads > 0
-      ? ((by_stage['discovery_call'] || 0)
-         + (by_stage['technical_review'] || 0)
-         + (by_stage['contract_sent'] || 0)
-         + (by_stage['onboarding'] || 0)
-         + (by_stage['live'] || 0)) / total_leads * 100
-      : 0;
-
-    // Phase 3: call_log and email_log tables were dropped. These overview
-    // counters return 0 until Phase 6 wires up new sources (recordings table,
-    // leads.email_status, etc.).
-    const total_call_cost = 0;
-    const total_calls = 0;
-    const total_emails = 0;
+    const { rows: [conversionResult] } = await query(`
+      SELECT ROUND(
+        COUNT(*) FILTER (WHERE pipeline_stage = 'live') * 100.0 / NULLIF(COUNT(*), 0)
+      ) AS rate
+      FROM leads
+    `);
+    const conversionRate = conversionResult?.rate != null ? Number(conversionResult.rate) : 0;
 
     res.json({
-      total_leads,
+      totalMsps,
+      contactedThisWeek,
+      discoveryCalls,
+      conversionRate,
       by_stage,
-      contacted_today,
-      meetings_this_week,
-      conversion_rate: Math.round(conversion_rate * 10) / 10,
-      total_call_cost,
-      total_calls,
-      total_emails,
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch stats', message: err.message });

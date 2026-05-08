@@ -230,10 +230,19 @@ export const getEnrichBulkStatus = () => fetchApi('/apollo/enrich-bulk/status');
 
 export const getApolloStatus = () => fetchApi('/apollo/status');
 
+// ============================================================
+// Apollo Sequences (Phase 5)
+// ============================================================
+export const getApolloSequences = () => fetchApi('/apollo/sequences');
+
+export const pushToApolloSequence = (leadIds, sequenceId) => fetchApi('/apollo/push-sequence', {
+  method: 'POST',
+  body: JSON.stringify({ leadIds, sequenceId }),
+});
+
 // Phase 3: Instantly Campaign Push helpers were removed along with the
-// /api/instantly backend routes. The stubs below keep PipelinePage and
-// LeadDetailModal importable until Phase 4/5/7 replace these call sites
-// with Apollo-based equivalents. Each resolves to an empty/no-op shape.
+// /api/instantly backend routes. These stubs remain only for any legacy
+// import sites still being migrated; the Pipeline page now uses Apollo.
 export const getInstantlyCampaigns = async () => ({ data: [] });
 export const pushToInstantly = async () => ({ pushed: 0, errors: [] });
 export const pushFilteredToInstantly = async () => ({ pushed: 0, errors: [] });

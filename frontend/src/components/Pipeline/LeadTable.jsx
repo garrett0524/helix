@@ -2,31 +2,58 @@ import { useState, useMemo, useEffect } from 'react'
 import { enrichLead } from '../../api'
 import './LeadTable.css'
 
+// MSP pipeline stages (Phase 5)
 const STAGE_LABELS = {
   new: 'New',
-  contacted: 'Contacted',
-  interested: 'Interested',
-  meeting_booked: 'Meeting Booked',
-  closed: 'Closed',
+  outreach_sent: 'Outreach Sent',
+  responded: 'Responded',
+  discovery_call: 'Discovery Call',
+  technical_review: 'Technical Review',
+  contract_sent: 'Contract Sent',
+  onboarding: 'Onboarding',
+  live: 'Live',
   dead: 'Dead',
 };
 
-const EMAIL_STATUS_DOT = {
-  none: '#6b7280',
-  sent: '#3b82f6',
-  opened: '#eab308',
-  replied: '#10b981',
-  bounced: '#ef4444',
+// Fixed MSP category dropdown options (Phase 5)
+const MSP_CATEGORIES = ['ISP', 'MSP', 'IT Services', 'WISP', 'Enterprise IT'];
+
+const EMAIL_STATUS_LABEL = {
+  none: 'No Email',
+  sent: 'Sent',
+  opened: 'Opened',
+  replied: 'Replied',
+  bounced: 'Bounced',
 };
 
-export default function LeadTable({ leads, onRowClick, onSort, sortField, sortDir, onLeadEnriched }) {
+function formatLocation(lead) {
+  const city = lead.city ? String(lead.city).trim() : '';
+  const state = lead.state ? String(lead.state).trim() : '';
+  if (city && state) return `${city}, ${state}`;
+  return city || state || '-';
+}
+
+function formatContact(lead) {
+  if (lead.contact_name && lead.contact_title) return `${lead.contact_name} (${lead.contact_title})`;
+  return lead.contact_name || lead.owner_name || '-';
+}
+
+export default function LeadTable({
+  leads,
+  onRowClick,
+  onSort,
+  sortField,
+  sortDir,
+  onLeadEnriched,
+  selectedIds = new Set(),
+  onSelectionChange,
+}) {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [search, setSearch] = useState('');
   const [enrichingId, setEnrichingId] = useState(null);
   const [filters, setFilters] = useState({
     category: '',
     stage: '',
-    attempts: '',
     scoreMin: '',
     scoreMax: '',
     emailStatus: '',
@@ -44,18 +71,14 @@ export default function LeadTable({ leads, onRowClick, onSort, sortField, sortDi
         const term = search.toLowerCase();
         const match = (lead.business_name || '').toLowerCase().includes(term)
           || (lead.address || '').toLowerCase().includes(term)
+          || (lead.contact_name || '').toLowerCase().includes(term)
           || (lead.owner_name || '').toLowerCase().includes(term)
+          || (lead.email || '').toLowerCase().includes(term)
           || (lead.city || '').toLowerCase().includes(term);
         if (!match) return false;
       }
       if (filters.category && lead.category !== filters.category) return false;
       if (filters.stage && lead.pipeline_stage !== filters.stage) return false;
-      if (filters.attempts) {
-        const att = lead.contact_attempts || 0;
-        if (filters.attempts === '0' && att !== 0) return false;
-        if (filters.attempts === '1-3' && (att < 1 || att > 3)) return false;
-        if (filters.attempts === '4+' && att < 4) return false;
-      }
       if (filters.scoreMin && lead.lead_score < Number(filters.scoreMin)) return false;
       if (filters.scoreMax && lead.lead_score > Number(filters.scoreMax)) return false;
       if (filters.emailStatus) {
@@ -68,18 +91,39 @@ export default function LeadTable({ leads, onRowClick, onSort, sortField, sortDi
     });
   }, [leads, search, filters]);
 
-  const categories = useMemo(() => {
-    const cats = new Set(leads.map(l => l.category).filter(Boolean));
-    return [...cats].sort();
-  }, [leads]);
-
   const handleSort = (field) => {
     if (onSort) onSort(field);
   };
 
   const SortIcon = ({ field }) => {
-    if (sortField !== field) return <span className="sort-icon">&#8693;</span>;
-    return <span className="sort-icon">{sortDir === 'asc' ? '&#8593;' : '&#8595;'}</span>;
+    if (sortField !== field) return <span className="sort-icon">{'⇳'}</span>;
+    return <span className="sort-icon">{sortDir === 'asc' ? '↑' : '↓'}</span>;
+  };
+
+  // Selection helpers — only operate when a parent passed onSelectionChange.
+  const selectionEnabled = typeof onSelectionChange === 'function';
+  const allFilteredSelected = selectionEnabled
+    && filteredLeads.length > 0
+    && filteredLeads.every(l => selectedIds.has(l.id));
+
+  const toggleOne = (id, e) => {
+    if (!selectionEnabled) return;
+    e?.stopPropagation();
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    onSelectionChange(next);
+  };
+
+  const toggleAllFiltered = (e) => {
+    if (!selectionEnabled) return;
+    e?.stopPropagation();
+    const next = new Set(selectedIds);
+    if (allFilteredSelected) {
+      filteredLeads.forEach(l => next.delete(l.id));
+    } else {
+      filteredLeads.forEach(l => next.add(l.id));
+    }
+    onSelectionChange(next);
   };
 
   return (
@@ -88,24 +132,18 @@ export default function LeadTable({ leads, onRowClick, onSort, sortField, sortDi
       <div className="lead-table-filters">
         <input
           type="search"
-          placeholder="Search leads..."
+          placeholder="Search MSPs..."
           value={search}
           onChange={e => setSearch(e.target.value)}
           className="lead-search"
         />
         <select value={filters.category} onChange={e => setFilters(f => ({...f, category: e.target.value}))}>
           <option value="">All Categories</option>
-          {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          {MSP_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         <select value={filters.stage} onChange={e => setFilters(f => ({...f, stage: e.target.value}))}>
           <option value="">All Stages</option>
           {Object.entries(STAGE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
-        <select value={filters.attempts} onChange={e => setFilters(f => ({...f, attempts: e.target.value}))}>
-          <option value="">All Attempts</option>
-          <option value="0">0 attempts</option>
-          <option value="1-3">1-3 attempts</option>
-          <option value="4+">4+ attempts</option>
         </select>
         <select value={filters.emailStatus} onChange={e => setFilters(f => ({...f, emailStatus: e.target.value}))}>
           <option value="">Email Status</option>
@@ -130,6 +168,18 @@ export default function LeadTable({ leads, onRowClick, onSort, sortField, sortDi
           onChange={e => setFilters(f => ({...f, scoreMax: e.target.value}))}
           style={{ width: '100px' }}
         />
+        {selectionEnabled && selectedIds.size > 0 && (
+          <span style={{
+            marginLeft: 'auto',
+            fontSize: '12px',
+            fontWeight: 600,
+            color: 'var(--accent-primary)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px',
+          }}>
+            {selectedIds.size} selected
+          </span>
+        )}
       </div>
 
       {/* Mobile Card View */}
@@ -185,94 +235,126 @@ export default function LeadTable({ leads, onRowClick, onSort, sortField, sortDi
           )}
         </div>
       ) : (
-        /* Desktop Table */
+        /* Desktop Table — MSP columns */
         <div className="lead-table-scroll">
           <table className="data-table">
             <thead>
               <tr>
+                {selectionEnabled && (
+                  <th style={{ width: '36px' }}>
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      onChange={toggleAllFiltered}
+                      onClick={e => e.stopPropagation()}
+                      aria-label="Select all visible leads"
+                    />
+                  </th>
+                )}
                 <th onClick={() => handleSort('business_name')}>Name <SortIcon field="business_name" /></th>
                 <th onClick={() => handleSort('category')}>Category <SortIcon field="category" /></th>
-                <th>Address</th>
-                <th>Phone</th>
-                <th>Owner</th>
+                <th>Location</th>
+                <th>Contact</th>
                 <th>Email</th>
-                <th onClick={() => handleSort('pipeline_stage')}>Stage <SortIcon field="pipeline_stage" /></th>
-                <th onClick={() => handleSort('last_contact_date')}>Last Contact <SortIcon field="last_contact_date" /></th>
-                <th onClick={() => handleSort('contact_attempts')}>Attempts <SortIcon field="contact_attempts" /></th>
+                <th onClick={() => handleSort('estimated_locations')}>Locations Managed <SortIcon field="estimated_locations" /></th>
+                <th>Hardware</th>
+                <th>Stage</th>
                 <th onClick={() => handleSort('lead_score')}>Score <SortIcon field="lead_score" /></th>
-                <th onClick={() => handleSort('created_at')}>Added <SortIcon field="created_at" /></th>
               </tr>
             </thead>
             <tbody>
               {filteredLeads.length === 0 ? (
                 <tr>
-                  <td colSpan={11} style={{ textAlign: 'center', color: 'var(--text-tertiary)', padding: 'var(--space-3xl)' }}>
+                  <td colSpan={selectionEnabled ? 11 : 10} style={{ textAlign: 'center', color: 'var(--text-tertiary)', padding: 'var(--space-3xl)' }}>
                     {leads.length === 0 ? 'No leads yet — run a scrape or import CSV' : 'No leads match filters'}
                   </td>
                 </tr>
               ) : (
-                filteredLeads.map(lead => (
-                  <tr key={lead.id} onClick={() => onRowClick(lead)} style={{ cursor: 'pointer' }}>
-                    <td style={{ fontWeight: 500 }}>{lead.business_name}</td>
-                    <td>{lead.category || '-'}</td>
-                    <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {lead.address ? `${lead.address}, ${lead.city || ''}` : '-'}
-                    </td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>{lead.phone || '-'}</td>
-                    <td>{lead.owner_name || '-'}</td>
-                    <td style={{ maxWidth: '180px' }}>
-                      {lead.email ? (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px' }}>
-                          <span style={{
-                            width: '7px', height: '7px', borderRadius: '50%', flexShrink: 0,
-                            background: EMAIL_STATUS_DOT[lead.email_status || 'none'] || EMAIL_STATUS_DOT.none,
-                          }} />
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.email}</span>
-                        </span>
-                      ) : (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEnrichingId(lead.id);
-                            enrichLead(lead.id).then(() => {
-                              if (onLeadEnriched) onLeadEnriched();
-                            }).catch(() => {}).finally(() => setEnrichingId(null));
-                          }}
-                          disabled={enrichingId === lead.id}
-                          style={{
-                            background: 'none', border: 'none', color: '#8b5cf6', cursor: 'pointer',
-                            fontSize: '12px', padding: 0, textDecoration: 'underline',
-                          }}
-                        >
-                          {enrichingId === lead.id ? 'Enriching...' : 'Enrich'}
-                        </button>
+                filteredLeads.map(lead => {
+                  const emailStatus = lead.email_status || 'none';
+                  const isSelected = selectedIds.has(lead.id);
+                  return (
+                    <tr
+                      key={lead.id}
+                      onClick={() => onRowClick(lead)}
+                      style={{
+                        cursor: 'pointer',
+                        background: isSelected ? 'rgba(139,92,246,0.06)' : undefined,
+                      }}
+                    >
+                      {selectionEnabled && (
+                        <td onClick={e => e.stopPropagation()} style={{ width: '36px' }}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => toggleOne(lead.id, e)}
+                            aria-label={`Select ${lead.business_name}`}
+                          />
+                        </td>
                       )}
-                    </td>
-                    <td>
-                      <span className={`badge badge-${lead.pipeline_stage}`}>
-                        {STAGE_LABELS[lead.pipeline_stage] || lead.pipeline_stage}
-                      </span>
-                    </td>
-                    <td>
-                      {lead.last_contact_date
-                        ? `${lead.last_contact_date.split('T')[0]} (${lead.last_contact_method || '-'})`
-                        : 'Never'}
-                    </td>
-                    <td style={{ textAlign: 'center' }}>{lead.contact_attempts || 0}</td>
-                    <td>
-                      <span style={{
-                        fontWeight: 600,
-                        color: lead.lead_score >= 70 ? 'var(--color-success)' :
-                               lead.lead_score >= 40 ? 'var(--color-warning)' : 'var(--text-secondary)'
-                      }}>
-                        {lead.lead_score || 0}
-                      </span>
-                    </td>
-                    <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                      {lead.created_at ? lead.created_at.split('T')[0] : '-'}
-                    </td>
-                  </tr>
-                ))
+                      <td style={{ fontWeight: 500 }}>{lead.business_name}</td>
+                      <td>{lead.category || '-'}</td>
+                      <td style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {formatLocation(lead)}
+                      </td>
+                      <td style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {formatContact(lead)}
+                      </td>
+                      <td style={{ maxWidth: '220px' }}>
+                        {lead.email ? (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', minWidth: 0 }}>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                              {lead.email}
+                            </span>
+                            <span
+                              className={`badge badge-email-${emailStatus}`}
+                              style={{ flexShrink: 0 }}
+                            >
+                              {EMAIL_STATUS_LABEL[emailStatus] || emailStatus}
+                            </span>
+                          </span>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEnrichingId(lead.id);
+                              enrichLead(lead.id).then(() => {
+                                if (onLeadEnriched) onLeadEnriched();
+                              }).catch(() => {}).finally(() => setEnrichingId(null));
+                            }}
+                            disabled={enrichingId === lead.id}
+                            style={{
+                              background: 'none', border: 'none', color: 'var(--accent-primary)', cursor: 'pointer',
+                              fontSize: '12px', padding: 0, textDecoration: 'underline',
+                            }}
+                          >
+                            {enrichingId === lead.id ? 'Enriching...' : 'Enrich'}
+                          </button>
+                        )}
+                      </td>
+                      <td style={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                        {lead.estimated_locations != null ? lead.estimated_locations : '-'}
+                      </td>
+                      <td style={{ maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                        {lead.hardware_vendors || '-'}
+                      </td>
+                      <td>
+                        <span className={`badge badge-${lead.pipeline_stage}`}>
+                          {STAGE_LABELS[lead.pipeline_stage] || lead.pipeline_stage}
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{
+                          fontWeight: 600,
+                          color: lead.lead_score >= 70 ? 'var(--color-success)' :
+                                 lead.lead_score >= 40 ? 'var(--color-warning)' : 'var(--text-secondary)'
+                        }}>
+                          {lead.lead_score || 0}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

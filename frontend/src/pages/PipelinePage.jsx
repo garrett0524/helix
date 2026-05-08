@@ -4,7 +4,15 @@ import KanbanBoard from '../components/Pipeline/KanbanBoard'
 import LeadTable from '../components/Pipeline/LeadTable'
 import LeadDetailModal from '../components/Shared/LeadDetailModal'
 import TodayScheduleWidget from '../components/Calendar/TodayScheduleWidget'
-import { getLeads, updateLead, createLead, enrichBulk, getEnrichBulkStatus, getInstantlyCampaigns, pushFilteredToInstantly } from '../api'
+import {
+  getLeads,
+  updateLead,
+  createLead,
+  enrichBulk,
+  getEnrichBulkStatus,
+  getApolloSequences,
+  pushToApolloSequence,
+} from '../api'
 
 export default function PipelinePage() {
   const [leads, setLeads] = useState([]);
@@ -14,26 +22,39 @@ export default function PipelinePage() {
   const [sortDir, setSortDir] = useState('desc');
   const [showAddLead, setShowAddLead] = useState(false);
 
+  // Bumped on every leads mutation so StatsBar re-fetches.
+  const [statsTick, setStatsTick] = useState(0);
+
   // Bulk action state
   const [showEnrichMenu, setShowEnrichMenu] = useState(false);
-  const [showPushMenu, setShowPushMenu] = useState(false);
+  const [showSequenceMenu, setShowSequenceMenu] = useState(false);
   const [bulkProgress, setBulkProgress] = useState(null); // { title, message, done }
-  const [campaigns, setCampaigns] = useState([]);
-  const [showCampaignSelect, setShowCampaignSelect] = useState(false);
-  const [selectedCampaign, setSelectedCampaign] = useState('');
-  const [pushFilter, setPushFilter] = useState('');
+  const [sequences, setSequences] = useState([]);
+  const [sequencesLoading, setSequencesLoading] = useState(false);
+  const [sequencesError, setSequencesError] = useState('');
+  const [toast, setToast] = useState(null); // { message }
   const enrichMenuRef = useRef(null);
-  const pushMenuRef = useRef(null);
+  const sequenceMenuRef = useRef(null);
+
+  // Row-level selection (drives "Push to Sequence")
+  const [selectedIds, setSelectedIds] = useState(new Set());
 
   // Close dropdown menus on outside click
   useEffect(() => {
     const handler = (e) => {
       if (enrichMenuRef.current && !enrichMenuRef.current.contains(e.target)) setShowEnrichMenu(false);
-      if (pushMenuRef.current && !pushMenuRef.current.contains(e.target)) setShowPushMenu(false);
+      if (sequenceMenuRef.current && !sequenceMenuRef.current.contains(e.target)) setShowSequenceMenu(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  // Auto-dismiss toast after 4s
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(id);
+  }, [toast]);
 
   // Enrichment confirmation state
   const [enrichConfirm, setEnrichConfirm] = useState(null); // { filter, preview }
@@ -42,7 +63,6 @@ export default function PipelinePage() {
     setShowEnrichMenu(false);
     setBulkProgress({ title: 'Checking Leads', message: 'Calculating credit usage...', done: false });
     try {
-      // Dry run first to show credit estimate
       const preview = await enrichBulk({ filter, dryRun: true });
       setBulkProgress(null);
       if (preview.needs_enrichment === 0) {
@@ -64,7 +84,6 @@ export default function PipelinePage() {
     setBulkProgress({ title: 'Enriching Leads', message: `Starting enrichment of ${total} leads...`, done: false, total, completed: 0 });
     try {
       await enrichBulk({ filter });
-      // Start polling for progress
       enrichPollRef.current = setInterval(async () => {
         try {
           const status = await getEnrichBulkStatus();
@@ -102,32 +121,39 @@ export default function PipelinePage() {
     };
   }, []);
 
-  const handleOpenPush = async (filter) => {
-    setShowPushMenu(false);
-    setPushFilter(filter);
-    setBulkProgress({ title: 'Loading Campaigns', message: 'Fetching Instantly campaigns...', done: false });
+  // Lazy-load Apollo sequences when the dropdown is first opened.
+  const handleOpenSequenceMenu = async () => {
+    const next = !showSequenceMenu;
+    setShowSequenceMenu(next);
+    setShowEnrichMenu(false);
+    if (!next) return;
+    if (sequences.length > 0 || sequencesLoading) return;
+    setSequencesLoading(true);
+    setSequencesError('');
     try {
-      const res = await getInstantlyCampaigns();
-      setCampaigns(res.data || []);
-      setBulkProgress(null);
-      setShowCampaignSelect(true);
+      const res = await getApolloSequences();
+      setSequences(res.data || []);
     } catch (err) {
-      setBulkProgress({ title: 'Failed', message: 'Could not load campaigns: ' + err.message, done: true });
+      setSequencesError(err.message || 'Failed to load sequences');
+    } finally {
+      setSequencesLoading(false);
     }
   };
 
-  const handlePushConfirm = async () => {
-    if (!selectedCampaign) return;
-    setShowCampaignSelect(false);
-    const campaignName = campaigns.find(c => c.id === selectedCampaign)?.name || 'campaign';
-    setBulkProgress({ title: 'Pushing to Instantly', message: `Pushing leads to "${campaignName}"...`, done: false });
+  const handlePushToSequence = async (sequence) => {
+    setShowSequenceMenu(false);
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) {
+      setBulkProgress({ title: 'No Leads Selected', message: 'Tick at least one lead row before pushing to a sequence.', done: true });
+      return;
+    }
+    setBulkProgress({ title: 'Pushing to Apollo', message: `Adding ${ids.length} lead(s) to "${sequence.name}"...`, done: false });
     try {
-      const result = await pushFilteredToInstantly(pushFilter, selectedCampaign);
-      setBulkProgress({
-        title: 'Push Complete',
-        message: `Pushed: ${result.pushed || 0}, Skipped (no email): ${result.skipped_no_email || 0}, Errors: ${result.errors || 0}`,
-        done: true,
-      });
+      const result = await pushToApolloSequence(ids, sequence.id);
+      const pushed = result?.pushed ?? ids.length;
+      setBulkProgress(null);
+      setToast({ message: `Pushed ${pushed} lead${pushed === 1 ? '' : 's'} to ${sequence.name}` });
+      setSelectedIds(new Set());
       fetchLeads();
     } catch (err) {
       setBulkProgress({ title: 'Push Failed', message: err.message, done: true });
@@ -138,6 +164,7 @@ export default function PipelinePage() {
     try {
       const result = await getLeads();
       setLeads(result.data || []);
+      setStatsTick(t => t + 1);
     } catch (err) {
       console.error('Failed to load leads:', err);
     } finally {
@@ -155,6 +182,7 @@ export default function PipelinePage() {
       setLeads(prev => prev.map(l =>
         l.id === leadId ? { ...l, pipeline_stage: newStage } : l
       ));
+      setStatsTick(t => t + 1);
     } catch (err) {
       console.error('Failed to update stage:', err);
     }
@@ -223,7 +251,7 @@ export default function PipelinePage() {
           <div ref={enrichMenuRef} style={{ position: 'relative' }}>
             <button
               className="btn btn-secondary"
-              onClick={() => { setShowEnrichMenu(!showEnrichMenu); setShowPushMenu(false); }}
+              onClick={() => { setShowEnrichMenu(!showEnrichMenu); setShowSequenceMenu(false); }}
               style={{ fontSize: '13px', background: 'linear-gradient(135deg, #8b5cf6, var(--accent-hover))', color: 'white', border: 'none' }}
             >
               Enrich &#9662;
@@ -241,23 +269,48 @@ export default function PipelinePage() {
             )}
           </div>
 
-          {/* Push to Instantly dropdown */}
-          <div ref={pushMenuRef} style={{ position: 'relative' }}>
+          {/* Push to Apollo Sequence dropdown */}
+          <div ref={sequenceMenuRef} style={{ position: 'relative' }}>
             <button
               className="btn btn-secondary"
-              onClick={() => { setShowPushMenu(!showPushMenu); setShowEnrichMenu(false); }}
+              onClick={handleOpenSequenceMenu}
               style={{ fontSize: '13px' }}
+              disabled={selectedIds.size === 0}
+              title={selectedIds.size === 0 ? 'Select leads first' : `Push ${selectedIds.size} lead(s)`}
             >
-              Push to Instantly &#9662;
+              Push to Sequence{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''} &#9662;
             </button>
-            {showPushMenu && (
+            {showSequenceMenu && (
               <div style={{
                 position: 'absolute', right: 0, top: '100%', marginTop: '4px', zIndex: 100,
                 background: 'var(--bg-card)', border: '1px solid var(--border-default)',
                 borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-lg)',
-                minWidth: '240px', overflow: 'hidden',
+                minWidth: '260px', maxHeight: '320px', overflowY: 'auto',
               }}>
-                <button onClick={() => handleOpenPush('has_email_not_sent')} style={dropdownItemStyle}>Push All Ready (has email, not sent)</button>
+                {sequencesLoading && (
+                  <div style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                    Loading sequences...
+                  </div>
+                )}
+                {!sequencesLoading && sequencesError && (
+                  <div style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--color-error)' }}>
+                    {sequencesError}
+                  </div>
+                )}
+                {!sequencesLoading && !sequencesError && sequences.length === 0 && (
+                  <div style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                    No Apollo sequences found.
+                  </div>
+                )}
+                {!sequencesLoading && !sequencesError && sequences.map(seq => (
+                  <button
+                    key={seq.id}
+                    onClick={() => handlePushToSequence(seq)}
+                    style={dropdownItemStyle}
+                  >
+                    {seq.name}
+                  </button>
+                ))}
               </div>
             )}
           </div>
@@ -298,27 +351,28 @@ export default function PipelinePage() {
         </div>
       )}
 
-      {/* Campaign selection modal */}
-      {showCampaignSelect && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-        }} onClick={() => setShowCampaignSelect(false)}>
-          <div className="card" style={{ maxWidth: '420px', width: '100%', padding: 'var(--space-2xl)' }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ marginBottom: 'var(--space-lg)' }}>Select Campaign</h3>
-            <select
-              value={selectedCampaign}
-              onChange={e => setSelectedCampaign(e.target.value)}
-              style={{ width: '100%', marginBottom: 'var(--space-lg)' }}
-            >
-              <option value="">Select a campaign...</option>
-              {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            <div style={{ display: 'flex', gap: 'var(--space-sm)', justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary" onClick={() => setShowCampaignSelect(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handlePushConfirm} disabled={!selectedCampaign}>Push Leads</button>
-            </div>
-          </div>
+      {/* Toast */}
+      {toast && (
+        <div
+          role="status"
+          style={{
+            position: 'fixed',
+            bottom: '24px',
+            right: '24px',
+            zIndex: 1100,
+            background: 'var(--bg-card-elevated)',
+            border: '1px solid var(--border-default)',
+            borderLeft: '3px solid var(--color-success)',
+            color: 'var(--text-primary)',
+            padding: '12px 18px',
+            borderRadius: 'var(--radius-md)',
+            boxShadow: 'var(--shadow-elevated)',
+            fontSize: '13px',
+            fontFamily: 'var(--font-body)',
+            maxWidth: '360px',
+          }}
+        >
+          {toast.message}
         </div>
       )}
 
@@ -358,7 +412,7 @@ export default function PipelinePage() {
 
       <TodayScheduleWidget />
 
-      <StatsBar />
+      <StatsBar refreshKey={statsTick} />
 
       <KanbanBoard
         leads={leads}
@@ -373,6 +427,8 @@ export default function PipelinePage() {
         sortField={sortField}
         sortDir={sortDir}
         onLeadEnriched={fetchLeads}
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
       />
 
       {selectedLead && (
@@ -469,7 +525,7 @@ function AddLeadModal({ onClose, onSave }) {
                 type="text"
                 value={form.business_name}
                 onChange={(e) => handleChange('business_name', e.target.value)}
-                placeholder="e.g. Joe's Pizza"
+                placeholder="e.g. Acme MSP"
                 autoFocus
                 required
                 style={fieldStyle}
@@ -479,13 +535,18 @@ function AddLeadModal({ onClose, onSave }) {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)' }}>
               <div>
                 <label style={labelStyle}>Category</label>
-                <input
-                  type="text"
+                <select
                   value={form.category}
                   onChange={(e) => handleChange('category', e.target.value)}
-                  placeholder="e.g. Restaurant"
                   style={fieldStyle}
-                />
+                >
+                  <option value="">Select...</option>
+                  <option value="ISP">ISP</option>
+                  <option value="MSP">MSP</option>
+                  <option value="IT Services">IT Services</option>
+                  <option value="WISP">WISP</option>
+                  <option value="Enterprise IT">Enterprise IT</option>
+                </select>
               </div>
               <div>
                 <label style={labelStyle}>Owner Name</label>
@@ -573,10 +634,14 @@ function AddLeadModal({ onClose, onSave }) {
                 style={fieldStyle}
               >
                 <option value="new">New</option>
-                <option value="contacted">Contacted</option>
-                <option value="interested">Interested</option>
-                <option value="meeting_booked">Meeting Booked</option>
-                <option value="closed">Closed</option>
+                <option value="outreach_sent">Outreach Sent</option>
+                <option value="responded">Responded</option>
+                <option value="discovery_call">Discovery Call</option>
+                <option value="technical_review">Technical Review</option>
+                <option value="contract_sent">Contract Sent</option>
+                <option value="onboarding">Onboarding</option>
+                <option value="live">Live</option>
+                <option value="dead">Dead</option>
               </select>
             </div>
 

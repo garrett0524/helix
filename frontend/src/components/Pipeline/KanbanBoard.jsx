@@ -2,12 +2,17 @@ import { useState } from 'react'
 import KanbanCard from './KanbanCard'
 import './KanbanBoard.css'
 
+// MSP pipeline stages (Phase 5) — order matters for left-to-right kanban flow.
+// Colors are sourced from CSS tokens defined in index.css (--stage-*).
 const STAGES = [
   { key: 'new', label: 'New', color: 'var(--stage-new)' },
-  { key: 'contacted', label: 'Contacted', color: 'var(--stage-contacted)' },
-  { key: 'interested', label: 'Interested', color: 'var(--stage-interested)' },
-  { key: 'meeting_booked', label: 'Meeting Booked', color: 'var(--stage-meeting)' },
-  { key: 'closed', label: 'Closed', color: 'var(--stage-closed)' },
+  { key: 'outreach_sent', label: 'Outreach Sent', color: 'var(--stage-outreach_sent)' },
+  { key: 'responded', label: 'Responded', color: 'var(--stage-responded)' },
+  { key: 'discovery_call', label: 'Discovery Call', color: 'var(--stage-discovery_call)' },
+  { key: 'technical_review', label: 'Technical Review', color: 'var(--stage-technical_review)' },
+  { key: 'contract_sent', label: 'Contract Sent', color: 'var(--stage-contract_sent)' },
+  { key: 'onboarding', label: 'Onboarding', color: 'var(--stage-onboarding)' },
+  { key: 'live', label: 'Live', color: 'var(--stage-live)' },
   { key: 'dead', label: 'Dead', color: 'var(--stage-dead)' },
 ];
 
