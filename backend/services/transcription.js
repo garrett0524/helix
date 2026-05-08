@@ -23,7 +23,7 @@ async function transcribeAudio(audioPath, modelSize = 'base') {
   // Python script that transcribes with speaker diarization.
   // Uses pyannote.audio for real speaker diarization when available,
   // falls back to improved silence-gap + audio-energy heuristic otherwise.
-  // The AI analysis prompt then identifies which is Garrett vs. the prospect.
+  // The AI analysis prompt then identifies who is on each side of the meeting.
   const pythonScript = `
 import sys
 import json
@@ -41,7 +41,7 @@ model_size = sys.argv[2] if len(sys.argv) > 2 else "base"
 def assign_speakers_energy(raw_segments, audio_path):
     """Use audio energy per segment to cluster speakers.
 
-    Since this is a phone call recorded from one mic, the caller (Garrett)
+    Since this is a meeting recorded from one mic, the local speaker
     is typically louder/closer to the mic. We compute RMS energy for each
     segment's time range and cluster into two groups.
     """

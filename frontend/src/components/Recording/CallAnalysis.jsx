@@ -3,18 +3,17 @@ import { applyAISuggestions, reanalyzeRecording } from '../../api'
 
 const OUTCOME_COLORS = {
   interested: 'var(--color-success)',
-  not_interested: 'var(--color-error)',
-  callback: 'var(--color-warning)',
-  send_info: 'var(--color-info)',
-  wrong_number: 'var(--color-error)',
-  no_answer: 'var(--text-tertiary)',
-  voicemail: 'var(--text-tertiary)',
+  scheduling_next: 'var(--color-success)',
+  requesting_contract: 'var(--color-success)',
+  needs_more_info: 'var(--color-info)',
+  follow_up_needed: 'var(--color-warning)',
+  not_a_fit: 'var(--color-error)',
 }
 
-const EFFECTIVENESS_COLORS = {
-  effective: 'var(--color-success)',
-  partially_effective: 'var(--color-warning)',
-  ineffective: 'var(--color-error)',
+const CONFIDENCE_COLORS = {
+  high: 'var(--color-success)',
+  medium: 'var(--color-warning)',
+  low: 'var(--color-error)',
 }
 
 export default function CallAnalysis({ recording, onLeadUpdated, onRecordingUpdated }) {
@@ -25,7 +24,28 @@ export default function CallAnalysis({ recording, onLeadUpdated, onRecordingUpda
 
   if (!recording) return null
 
-  const hasAnalysis = recording.ai_summary || recording.ai_score
+  // The new prompt stores the full analysis JSON in ai_key_info; ai_auto_update
+  // carries {suggested_stage, suggested_notes} for the apply-suggestions endpoint.
+  const analysis = recording.ai_key_info || {}
+  const autoUpdate = recording.ai_auto_update || {}
+  const summary = recording.ai_summary || analysis.summary
+  const outcome = recording.ai_outcome || analysis.outcome
+  const mspDetails = analysis.msp_details || {}
+  const keyPeople = Array.isArray(analysis.key_people) ? analysis.key_people : []
+  const concerns = Array.isArray(analysis.concerns_raised) ? analysis.concerns_raised : []
+  const nextSteps = Array.isArray(analysis.next_steps) ? analysis.next_steps : []
+  const followUps = Array.isArray(analysis.follow_up_suggestions) ? analysis.follow_up_suggestions : []
+  const dealPotential = analysis.deal_potential || {}
+  const interestLevel = typeof analysis.interest_level === 'number' ? analysis.interest_level : null
+  const timeline = analysis.timeline_discussed
+
+  const hasAnalysis =
+    !!summary ||
+    !!outcome ||
+    keyPeople.length > 0 ||
+    concerns.length > 0 ||
+    nextSteps.length > 0 ||
+    Object.keys(mspDetails).some((k) => mspDetails[k] != null && mspDetails[k] !== '')
 
   const handleReanalyze = async () => {
     setReanalyzing(true)
@@ -52,75 +72,40 @@ export default function CallAnalysis({ recording, onLeadUpdated, onRecordingUpda
     }
   }
 
-  const sentiment = recording.ai_sentiment || {}
-  const pitchFeedback = recording.ai_pitch_feedback || {}
-  const keyInfo = recording.ai_key_info || {}
-  const autoUpdate = recording.ai_auto_update || {}
-  const objections = recording.ai_objections || []
-
   return (
     <div style={{
       background: 'var(--bg-tertiary)',
       borderRadius: 'var(--radius-md)',
       padding: 'var(--space-lg)',
-      marginBottom: 'var(--space-md)'
+      marginBottom: 'var(--space-md)',
     }}>
-      {/* Header with score and outcome */}
+      {/* Header */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 'var(--space-lg)'
+        marginBottom: 'var(--space-lg)',
+        flexWrap: 'wrap',
+        gap: 'var(--space-sm)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-          {recording.ai_score != null && (
-            <div style={{
-              width: '48px',
-              height: '48px',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 700,
-              fontSize: '16px',
-              background: recording.ai_score >= 70
-                ? 'rgba(16, 185, 129, 0.15)'
-                : recording.ai_score >= 40
-                  ? 'rgba(245, 158, 11, 0.15)'
-                  : 'rgba(239, 68, 68, 0.15)',
-              color: recording.ai_score >= 70
-                ? 'var(--color-success)'
-                : recording.ai_score >= 40
-                  ? 'var(--color-warning)'
-                  : 'var(--color-error)',
-              border: `2px solid ${recording.ai_score >= 70
-                ? 'var(--color-success)'
-                : recording.ai_score >= 40
-                  ? 'var(--color-warning)'
-                  : 'var(--color-error)'}`
-            }}>
-              {recording.ai_score}
-            </div>
-          )}
-          <div>
-            <div style={{ fontWeight: 600, fontSize: '15px' }}>Call Analysis</div>
-            <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
-              {recording.duration_seconds ? formatDuration(recording.duration_seconds) : '--:--'}
-              {' | '}
-              {recording.created_at ? recording.created_at.split('T')[0] : ''}
-            </div>
+        <div>
+          <div style={{ fontWeight: 600, fontSize: '15px' }}>Meeting Analysis</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+            {recording.duration_seconds ? formatDuration(recording.duration_seconds) : '--:--'}
+            {' | '}
+            {recording.created_at ? recording.created_at.split('T')[0] : ''}
           </div>
         </div>
-        {recording.ai_outcome && (
+        {outcome && (
           <span style={{
             padding: '4px 12px',
             borderRadius: 'var(--radius-full)',
             fontSize: '12px',
             fontWeight: 600,
-            color: OUTCOME_COLORS[recording.ai_outcome] || 'var(--text-secondary)',
-            background: `${OUTCOME_COLORS[recording.ai_outcome] || 'var(--text-secondary)'}20`
+            color: OUTCOME_COLORS[outcome] || 'var(--text-secondary)',
+            background: `${OUTCOME_COLORS[outcome] || 'var(--text-secondary)'}20`,
           }}>
-            {recording.ai_outcome.replace(/_/g, ' ').toUpperCase()}
+            {outcome.replace(/_/g, ' ').toUpperCase()}
           </span>
         )}
       </div>
@@ -137,64 +122,165 @@ export default function CallAnalysis({ recording, onLeadUpdated, onRecordingUpda
       )}
 
       {/* Summary */}
-      {recording.ai_summary && (
+      {summary && (
         <div style={{ marginBottom: 'var(--space-lg)' }}>
           <SectionLabel>Summary</SectionLabel>
           <p style={{ fontSize: '13px', lineHeight: 1.6, color: 'var(--text-primary)' }}>
-            {recording.ai_summary}
+            {summary}
           </p>
         </div>
       )}
 
-      {/* Sentiment gauges */}
-      {(sentiment.prospect_interest_level || sentiment.garrett_confidence_level) && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: 'var(--space-md)',
-          marginBottom: 'var(--space-lg)'
-        }}>
-          {sentiment.prospect_interest_level && (
-            <GaugeBar label="Prospect Interest" value={sentiment.prospect_interest_level} max={10} />
-          )}
-          {sentiment.garrett_confidence_level && (
-            <GaugeBar label="Your Confidence" value={sentiment.garrett_confidence_level} max={10} />
+      {/* Interest Level + Timeline + Deal Potential side-by-side */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gap: 'var(--space-md)',
+        marginBottom: 'var(--space-lg)',
+      }}>
+        {interestLevel != null && (
+          <div style={{
+            background: 'var(--bg-secondary)',
+            borderRadius: 'var(--radius-md)',
+            padding: 'var(--space-md)',
+          }}>
+            <SectionLabel>Interest Level</SectionLabel>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginTop: '4px' }}>
+              <div style={{ flex: 1, height: '8px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-full)' }}>
+                <div style={{
+                  height: '100%',
+                  width: `${interestLevel * 10}%`,
+                  background: interestLevel >= 7 ? 'var(--color-success)' : interestLevel >= 4 ? 'var(--color-warning)' : 'var(--color-error)',
+                  borderRadius: 'var(--radius-full)',
+                  transition: 'width 0.3s ease',
+                }} />
+              </div>
+              <span style={{
+                fontSize: '14px',
+                fontWeight: 600,
+                color: interestLevel >= 7 ? 'var(--color-success)' : interestLevel >= 4 ? 'var(--color-warning)' : 'var(--color-error)',
+              }}>
+                {interestLevel}/10
+              </span>
+            </div>
+          </div>
+        )}
+
+        {timeline && (
+          <div style={{
+            background: 'var(--bg-secondary)',
+            borderRadius: 'var(--radius-md)',
+            padding: 'var(--space-md)',
+          }}>
+            <SectionLabel>Timeline Discussed</SectionLabel>
+            <div style={{ fontSize: '13px', color: 'var(--text-primary)', marginTop: '4px' }}>
+              {timeline}
+            </div>
+          </div>
+        )}
+
+        {(dealPotential.estimated_locations != null || dealPotential.estimated_value || dealPotential.confidence) && (
+          <div style={{
+            background: 'var(--bg-secondary)',
+            borderRadius: 'var(--radius-md)',
+            padding: 'var(--space-md)',
+          }}>
+            <SectionLabel>Deal Potential</SectionLabel>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '4px', fontSize: '13px' }}>
+              {dealPotential.estimated_locations != null && (
+                <div><span style={{ color: 'var(--text-tertiary)' }}>Est. locations:</span> <span style={{ fontWeight: 500 }}>{dealPotential.estimated_locations}</span></div>
+              )}
+              {dealPotential.estimated_value && (
+                <div><span style={{ color: 'var(--text-tertiary)' }}>Value:</span> <span style={{ fontWeight: 500 }}>{dealPotential.estimated_value}</span></div>
+              )}
+              {dealPotential.confidence && (
+                <div>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Confidence:</span>{' '}
+                  <span style={{
+                    fontWeight: 600,
+                    color: CONFIDENCE_COLORS[dealPotential.confidence] || 'var(--text-secondary)',
+                    textTransform: 'capitalize',
+                  }}>
+                    {dealPotential.confidence}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* MSP Details */}
+      {(mspDetails.locations_discussed != null
+        || mspDetails.geographic_coverage
+        || mspDetails.manages_wifi != null
+        || (Array.isArray(mspDetails.hardware_mentioned) && mspDetails.hardware_mentioned.length > 0)) && (
+        <div style={{ marginBottom: 'var(--space-lg)' }}>
+          <SectionLabel>MSP Details</SectionLabel>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gap: 'var(--space-sm)',
+          }}>
+            {mspDetails.locations_discussed != null && (
+              <InfoPill label="Locations" value={String(mspDetails.locations_discussed)} />
+            )}
+            {mspDetails.geographic_coverage && (
+              <InfoPill label="Geo Coverage" value={mspDetails.geographic_coverage} />
+            )}
+            {mspDetails.manages_wifi != null && (
+              <InfoPill
+                label="Manages WiFi"
+                value={mspDetails.manages_wifi === true ? 'Yes' : mspDetails.manages_wifi === false ? 'No' : 'Unknown'}
+              />
+            )}
+          </div>
+          {Array.isArray(mspDetails.hardware_mentioned) && mspDetails.hardware_mentioned.length > 0 && (
+            <div style={{ marginTop: 'var(--space-sm)', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginRight: '4px' }}>Hardware:</span>
+              {mspDetails.hardware_mentioned.map((hw, i) => (
+                <span
+                  key={i}
+                  style={{
+                    fontSize: '12px',
+                    padding: '2px 8px',
+                    borderRadius: 'var(--radius-full)',
+                    background: 'var(--bg-secondary)',
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  {hw}
+                </span>
+              ))}
+            </div>
           )}
         </div>
       )}
 
-      {/* Objections */}
-      {objections.length > 0 && (
+      {/* Key People */}
+      {keyPeople.length > 0 && (
         <div style={{ marginBottom: 'var(--space-lg)' }}>
-          <SectionLabel>Objections Detected ({objections.length})</SectionLabel>
-          {objections.map((obj, i) => (
-            <div key={i} style={{
-              background: 'var(--bg-secondary)',
-              borderRadius: 'var(--radius-sm)',
-              padding: 'var(--space-md)',
-              marginBottom: 'var(--space-sm)',
-              fontSize: '13px'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-xs)' }}>
-                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                  "{obj.objection}"
-                </span>
-                <span style={{
-                  fontSize: '11px',
-                  fontWeight: 500,
-                  color: EFFECTIVENESS_COLORS[obj.effectiveness] || 'var(--text-tertiary)'
-                }}>
-                  {(obj.effectiveness || '').replace(/_/g, ' ').toUpperCase()}
-                </span>
+          <SectionLabel>Key People ({keyPeople.length})</SectionLabel>
+          {keyPeople.map((person, i) => (
+            <div
+              key={i}
+              style={{
+                background: 'var(--bg-secondary)',
+                borderRadius: 'var(--radius-sm)',
+                padding: 'var(--space-sm) var(--space-md)',
+                marginBottom: 'var(--space-xs)',
+                fontSize: '13px',
+              }}
+            >
+              <div style={{ fontWeight: 600 }}>
+                {person.name || 'Unknown'}
+                {person.title && (
+                  <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}> — {person.title}</span>
+                )}
               </div>
-              {obj.response_given && (
-                <div style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-xs)' }}>
-                  Your response: {obj.response_given}
-                </div>
-              )}
-              {obj.suggested_improvement && (
-                <div style={{ color: 'var(--accent-primary)', fontStyle: 'italic' }}>
-                  Suggestion: {obj.suggested_improvement}
+              {person.role_in_decision && (
+                <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                  {person.role_in_decision}
                 </div>
               )}
             </div>
@@ -202,96 +288,81 @@ export default function CallAnalysis({ recording, onLeadUpdated, onRecordingUpda
         </div>
       )}
 
-      {/* Pitch Feedback */}
-      {(pitchFeedback.strengths?.length > 0 || pitchFeedback.weaknesses?.length > 0) && (
+      {/* Concerns */}
+      {concerns.length > 0 && (
         <div style={{ marginBottom: 'var(--space-lg)' }}>
-          <SectionLabel>Pitch Feedback</SectionLabel>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)' }}>
-            {pitchFeedback.strengths?.length > 0 && (
-              <div>
-                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-success)', marginBottom: 'var(--space-xs)' }}>
-                  Strengths
-                </div>
-                <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  {pitchFeedback.strengths.map((s, i) => <li key={i} style={{ marginBottom: '2px' }}>{s}</li>)}
-                </ul>
-              </div>
-            )}
-            {pitchFeedback.weaknesses?.length > 0 && (
-              <div>
-                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-warning)', marginBottom: 'var(--space-xs)' }}>
-                  Areas to Improve
-                </div>
-                <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  {pitchFeedback.weaknesses.map((w, i) => <li key={i} style={{ marginBottom: '2px' }}>{w}</li>)}
-                </ul>
-              </div>
-            )}
-          </div>
-          {pitchFeedback.specific_suggestions?.length > 0 && (
-            <div style={{ marginTop: 'var(--space-md)' }}>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent-primary)', marginBottom: 'var(--space-xs)' }}>
-                Specific Suggestions
-              </div>
-              <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                {pitchFeedback.specific_suggestions.map((s, i) => <li key={i} style={{ marginBottom: '2px' }}>{s}</li>)}
-              </ul>
-            </div>
-          )}
+          <SectionLabel>Concerns Raised</SectionLabel>
+          <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', color: 'var(--text-primary)', lineHeight: 1.6 }}>
+            {concerns.map((c, i) => <li key={i}>{c}</li>)}
+          </ul>
         </div>
       )}
 
-      {/* Key Info Captured */}
-      {keyInfo && Object.values(keyInfo).some(v => v && (!Array.isArray(v) || v.length > 0)) && (
+      {/* Next Steps */}
+      {nextSteps.length > 0 && (
         <div style={{ marginBottom: 'var(--space-lg)' }}>
-          <SectionLabel>Key Info Captured</SectionLabel>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-sm)', fontSize: '13px' }}>
-            {keyInfo.owner_name && <InfoPill label="Owner" value={keyInfo.owner_name} />}
-            {keyInfo.best_callback_time && <InfoPill label="Callback Time" value={keyInfo.best_callback_time} />}
-            {keyInfo.email && <InfoPill label="Email" value={keyInfo.email} />}
-            {keyInfo.internet_speed && <InfoPill label="Internet Speed" value={keyInfo.internet_speed} />}
-          </div>
-          {keyInfo.concerns?.length > 0 && (
-            <div style={{ marginTop: 'var(--space-sm)' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>Concerns: </span>
-              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                {keyInfo.concerns.join(', ')}
-              </span>
-            </div>
-          )}
+          <SectionLabel>Next Steps</SectionLabel>
+          <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', color: 'var(--text-primary)', lineHeight: 1.6 }}>
+            {nextSteps.map((s, i) => <li key={i}>{s}</li>)}
+          </ul>
         </div>
       )}
 
-      {/* AI Suggestions */}
-      {autoUpdate.suggested_stage && (
+      {/* Follow-up Suggestions */}
+      {followUps.length > 0 && (
+        <div style={{ marginBottom: 'var(--space-lg)' }}>
+          <SectionLabel>Follow-Up Suggestions</SectionLabel>
+          <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', color: 'var(--text-primary)', lineHeight: 1.6 }}>
+            {followUps.map((s, i) => <li key={i}>{s}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {/* AI Suggestions Apply */}
+      {(autoUpdate.suggested_stage || autoUpdate.suggested_notes) && (
         <div style={{
           background: 'var(--bg-secondary)',
           borderRadius: 'var(--radius-md)',
           padding: 'var(--space-md)',
           marginBottom: 'var(--space-md)',
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
+          flexDirection: 'column',
+          gap: 'var(--space-sm)',
         }}>
-          <div style={{ fontSize: '13px' }}>
-            <span style={{ color: 'var(--text-secondary)' }}>AI suggests moving to: </span>
-            <span style={{ fontWeight: 600, color: 'var(--accent-primary)' }}>
-              {autoUpdate.suggested_stage.replace(/_/g, ' ')}
-            </span>
-          </div>
-          {!applied ? (
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={handleApplySuggestions}
-              disabled={applying}
-            >
-              {applying ? 'Applying...' : 'Apply'}
-            </button>
-          ) : (
-            <span style={{ fontSize: '12px', color: 'var(--color-success)', fontWeight: 500 }}>
-              Applied
-            </span>
+          {autoUpdate.suggested_stage && (
+            <div style={{ fontSize: '13px' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>AI suggests stage: </span>
+              <span style={{ fontWeight: 600, color: 'var(--accent-primary)', textTransform: 'capitalize' }}>
+                {autoUpdate.suggested_stage.replace(/_/g, ' ')}
+              </span>
+            </div>
           )}
+          {autoUpdate.suggested_notes && (
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontStyle: 'italic', lineHeight: 1.5 }}>
+              "{autoUpdate.suggested_notes}"
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 'var(--space-sm)', flexWrap: 'wrap' }}>
+            {!applied ? (
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={handleApplySuggestions}
+                disabled={applying}
+              >
+                {applying
+                  ? 'Applying...'
+                  : autoUpdate.suggested_stage && autoUpdate.suggested_notes
+                    ? 'Apply Stage + Append Notes'
+                    : autoUpdate.suggested_stage
+                      ? 'Apply Suggested Stage'
+                      : 'Append Suggested Notes'}
+              </button>
+            ) : (
+              <span style={{ fontSize: '12px', color: 'var(--color-success)', fontWeight: 500 }}>
+                Applied
+              </span>
+            )}
+          </div>
         </div>
       )}
 
@@ -316,7 +387,7 @@ export default function CallAnalysis({ recording, onLeadUpdated, onRecordingUpda
               fontSize: '13px',
               lineHeight: 1.7,
               color: 'var(--text-secondary)',
-              whiteSpace: 'pre-wrap'
+              whiteSpace: 'pre-wrap',
             }}>
               {recording.transcript}
             </div>
@@ -333,7 +404,7 @@ export default function CallAnalysis({ recording, onLeadUpdated, onRecordingUpda
             disabled={reanalyzing}
             style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}
           >
-            {reanalyzing ? 'Reanalyzing...' : 'Reanalyze Call'}
+            {reanalyzing ? 'Reanalyzing...' : 'Reanalyze Meeting'}
           </button>
         </div>
       )}
@@ -344,7 +415,7 @@ export default function CallAnalysis({ recording, onLeadUpdated, onRecordingUpda
           textAlign: 'center',
           padding: 'var(--space-md)',
           color: 'var(--text-tertiary)',
-          fontSize: '13px'
+          fontSize: '13px',
         }}>
           <p style={{ marginBottom: 'var(--space-sm)' }}>No AI analysis available.</p>
           {recording.transcript ? (
@@ -385,7 +456,7 @@ export default function CallAnalysis({ recording, onLeadUpdated, onRecordingUpda
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          gap: 'var(--space-md)'
+          gap: 'var(--space-md)',
         }}>
           <span>{recording.error_message}</span>
           {recording.transcript && (
@@ -411,26 +482,9 @@ function SectionLabel({ children }) {
       fontWeight: 600,
       color: 'var(--text-tertiary)',
       textTransform: 'uppercase',
-      marginBottom: 'var(--space-sm)'
+      marginBottom: 'var(--space-sm)',
     }}>
       {children}
-    </div>
-  )
-}
-
-function GaugeBar({ label, value, max }) {
-  const pct = (value / max) * 100
-  const color = pct >= 70 ? 'var(--color-success)' : pct >= 40 ? 'var(--color-warning)' : 'var(--color-error)'
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-        <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
-        <span style={{ color, fontWeight: 600 }}>{value}/{max}</span>
-      </div>
-      <div style={{ height: '6px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-full)' }}>
-        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 'var(--radius-full)', transition: 'width 0.3s ease' }} />
-      </div>
     </div>
   )
 }
@@ -440,10 +494,10 @@ function InfoPill({ label, value }) {
     <div style={{
       background: 'var(--bg-secondary)',
       borderRadius: 'var(--radius-sm)',
-      padding: 'var(--space-xs) var(--space-sm)'
+      padding: 'var(--space-xs) var(--space-sm)',
     }}>
       <span style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}>{label}: </span>
-      <span style={{ color: 'var(--text-primary)' }}>{value}</span>
+      <span style={{ color: 'var(--text-primary)', fontSize: '13px' }}>{value}</span>
     </div>
   )
 }

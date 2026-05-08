@@ -34,7 +34,7 @@ const STAGES = [
 
 const TABS = [
   { key: 'details', label: 'Details' },
-  { key: 'calls', label: 'Calls' },
+  { key: 'calls', label: 'Meetings' },
 ];
 
 const EVENT_TYPES = [
@@ -979,7 +979,7 @@ export default function LeadDetailModal({ lead: initialLead, onClose, onSave }) 
                 color: 'var(--text-tertiary)',
                 fontSize: '13px'
               }}>
-                No recordings yet. Click "Start Recording" above to record a call.
+                No recordings yet. Click "Start Recording" above to record a meeting, or upload an existing audio file.
               </div>
             ) : (
               <div>

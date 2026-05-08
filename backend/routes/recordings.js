@@ -126,7 +126,7 @@ router.get('/stats/overview', async (req, res) => {
 
     const { rows: [totalWithOutcome] } = await query("SELECT COUNT(*) as count FROM recordings WHERE ai_outcome IS NOT NULL");
     const { rows: [converted] } = await query(
-      "SELECT COUNT(*) as count FROM recordings WHERE ai_outcome IN ('interested', 'callback', 'send_info')"
+      "SELECT COUNT(*) as count FROM recordings WHERE ai_outcome IN ('interested', 'scheduling_next', 'requesting_contract')"
     );
     const conversionRate = totalWithOutcome && parseInt(totalWithOutcome.count) > 0
       ? Math.round((parseInt(converted.count) / parseInt(totalWithOutcome.count)) * 100)
@@ -294,7 +294,7 @@ router.post('/upload', upload.single('audio'), async (req, res) => {
     const recordingId = newRec.id;
 
     await query(
-      "UPDATE leads SET contact_attempts = contact_attempts + 1, last_contact_date = NOW()::text, last_contact_method = 'call', updated_at = NOW() WHERE id = $1",
+      "UPDATE leads SET contact_attempts = contact_attempts + 1, last_contact_date = NOW()::text, last_contact_method = 'meeting', updated_at = NOW() WHERE id = $1",
       [Number(lead_id)]
     );
 
@@ -354,6 +354,13 @@ router.post('/:id/reanalyze', async (req, res) => {
     // Run analysis in the background
     try {
       const analysis = await analyzeTranscript(recording.transcript);
+      const autoUpdate = {
+        suggested_stage: analysis.suggested_stage || null,
+        suggested_notes: analysis.suggested_notes || null,
+      };
+      const interestScore = typeof analysis.interest_level === 'number'
+        ? Math.max(0, Math.min(100, Math.round(analysis.interest_level * 10)))
+        : null;
       await query(
         `UPDATE recordings SET
           ai_summary = $1, ai_objections = $2, ai_sentiment = $3,
@@ -362,13 +369,13 @@ router.post('/:id/reanalyze', async (req, res) => {
         WHERE id = $9`,
         [
           analysis.summary || null,
-          JSON.stringify(analysis.objections || []),
-          JSON.stringify(analysis.sentiment || {}),
+          JSON.stringify([]),
+          JSON.stringify({}),
           analysis.outcome || null,
-          JSON.stringify(analysis.pitch_feedback || {}),
-          analysis.call_quality_score || null,
-          JSON.stringify(analysis.key_info_captured || {}),
-          JSON.stringify(analysis.auto_update || {}),
+          JSON.stringify({}),
+          interestScore,
+          JSON.stringify(analysis),
+          JSON.stringify(autoUpdate),
           recording.id
         ]
       );
@@ -482,6 +489,13 @@ async function processPipeline(recordingId, audioPath, leadId) {
 
     try {
       const analysis = await analyzeTranscript(transcriptResult.transcript);
+      const autoUpdate = {
+        suggested_stage: analysis.suggested_stage || null,
+        suggested_notes: analysis.suggested_notes || null,
+      };
+      const interestScore = typeof analysis.interest_level === 'number'
+        ? Math.max(0, Math.min(100, Math.round(analysis.interest_level * 10)))
+        : null;
 
       await query(
         `UPDATE recordings SET
@@ -497,13 +511,13 @@ async function processPipeline(recordingId, audioPath, leadId) {
         WHERE id = $9`,
         [
           analysis.summary || null,
-          JSON.stringify(analysis.objections || []),
-          JSON.stringify(analysis.sentiment || {}),
+          JSON.stringify([]),
+          JSON.stringify({}),
           analysis.outcome || null,
-          JSON.stringify(analysis.pitch_feedback || {}),
-          analysis.call_quality_score || null,
-          JSON.stringify(analysis.key_info_captured || {}),
-          JSON.stringify(analysis.auto_update || {}),
+          JSON.stringify({}),
+          interestScore,
+          JSON.stringify(analysis),
+          JSON.stringify(autoUpdate),
           recordingId
         ]
       );

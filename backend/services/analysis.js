@@ -1,8 +1,9 @@
 /**
  * AI Analysis Service
  *
- * Uses the Anthropic API (Claude) to analyze call transcripts.
- * Extracts summary, objections, sentiment, pitch feedback, and scoring.
+ * Uses the Anthropic API (Claude) to analyze meeting transcripts.
+ * Extracts MSP/ISP discovery context: locations, hardware, key people,
+ * concerns, next steps, deal potential, and pipeline-stage suggestions.
  */
 
 const { query } = require('../database/pg');
@@ -46,42 +47,35 @@ async function analyzeTranscript(transcript) {
     throw new Error('Anthropic API key not configured. Add it in Settings.');
   }
 
-  const prompt = `Analyze this cold call transcript. Garrett sells internet/telecom services to local businesses. The transcript has Speaker 1 and Speaker 2 labels — determine which is Garrett (the salesperson/pitcher) and which is the prospect (business owner/employee) based on context. Return ONLY valid JSON, no markdown, no code fences.
+  const prompt = `Analyze this sales meeting transcript. The Fractals team is discussing Helium Wi-Fi brownfield conversions with an MSP/ISP prospect. Extract the following as JSON:
 
 {
-  "summary": "2-3 sentence summary of the call",
-  "outcome": "interested | not_interested | callback | send_info | wrong_number | no_answer | voicemail",
-  "objections": [
-    {
-      "objection": "The exact objection raised",
-      "response_given": "How Garrett responded",
-      "effectiveness": "effective | partially_effective | ineffective",
-      "suggested_improvement": "A better way to handle this objection"
-    }
+  "summary": "2-3 sentence summary of the meeting",
+  "outcome": "interested | needs_more_info | scheduling_next | requesting_contract | not_a_fit | follow_up_needed",
+  "msp_details": {
+    "locations_discussed": number or null,
+    "hardware_mentioned": ["Ubiquiti", "Cisco", etc] or [],
+    "manages_wifi": true/false/null,
+    "geographic_coverage": "string or null"
+  },
+  "key_people": [
+    { "name": "string", "title": "string", "role_in_decision": "string" }
   ],
-  "sentiment": {
-    "overall": "positive | neutral | negative",
-    "prospect_interest_level": 1-10,
-    "garrett_confidence_level": 1-10
+  "concerns_raised": ["string"],
+  "next_steps": ["string"],
+  "timeline_discussed": "string or null",
+  "interest_level": 1-10,
+  "deal_potential": {
+    "estimated_locations": number or null,
+    "estimated_value": "string description or null",
+    "confidence": "high | medium | low"
   },
-  "pitch_feedback": {
-    "strengths": ["What Garrett did well"],
-    "weaknesses": ["What could be improved"],
-    "specific_suggestions": ["Concrete changes to make"]
-  },
-  "call_quality_score": 0-100,
-  "key_info_captured": {
-    "owner_name": "Name if mentioned, otherwise null",
-    "best_callback_time": "If mentioned, otherwise null",
-    "email": "If given, otherwise null",
-    "internet_speed": "If discussed, otherwise null",
-    "concerns": ["Any specific concerns mentioned"]
-  },
-  "auto_update": {
-    "suggested_stage": "new | contacted | interested | meeting_booked | closed | dead",
-    "suggested_notes": "Notes to add to the lead record"
-  }
+  "suggested_stage": "new | outreach_sent | responded | discovery_call | technical_review | contract_sent | onboarding | live | dead",
+  "suggested_notes": "notes to add to lead record",
+  "follow_up_suggestions": ["specific action items"]
 }
+
+Return ONLY valid JSON, no markdown, no code fences. Use null when information is not present in the transcript.
 
 TRANSCRIPT:
 ${transcript}`;
@@ -129,23 +123,23 @@ async function generateCoachingReport(recordings) {
   }
 
   const callSummaries = recordings.map((r, i) => {
-    return `Call ${i + 1} (${r.created_at}): Score=${r.ai_score || 'N/A'}, Outcome=${r.ai_outcome || 'N/A'}\nTranscript excerpt: ${(r.transcript || '').substring(0, 500)}`;
+    return `Meeting ${i + 1} (${r.created_at}): Outcome=${r.ai_outcome || 'N/A'}\nTranscript excerpt: ${(r.transcript || '').substring(0, 500)}`;
   }).join('\n\n---\n\n');
 
-  const prompt = `You are an expert sales coach analyzing all of Garrett's cold calls. He sells internet/telecom services to local businesses. Based on the following call data, generate a comprehensive coaching report. Return ONLY valid JSON, no markdown, no code fences.
+  const prompt = `You are an expert sales coach analyzing the Fractals team's MSP/ISP discovery meetings about Helium Wi-Fi brownfield conversions. Based on the following meeting data, generate a comprehensive coaching report. Return ONLY valid JSON, no markdown, no code fences.
 
 {
-  "top_strengths": ["Top 3 things Garrett does well consistently"],
+  "top_strengths": ["Top 3 things the team does well consistently"],
   "top_improvements": ["Top 3 areas for improvement"],
-  "script_suggestions": ["Suggested script modifications based on what's working"],
-  "objection_gaps": ["Objections that need better responses"],
-  "optimal_call_times": "Analysis of optimal call times based on engagement data",
+  "script_suggestions": ["Suggested talking-track modifications based on what's working"],
+  "objection_gaps": ["Recurring concerns that need better responses"],
+  "optimal_call_times": "Analysis of meeting timing and engagement patterns",
   "overall_trend": "improving | stable | declining",
-  "confidence_assessment": "Assessment of Garrett's confidence trajectory",
+  "confidence_assessment": "Assessment of the team's discovery confidence trajectory",
   "next_steps": ["Specific actionable next steps for improvement"]
 }
 
-CALL DATA (${recordings.length} total calls):
+MEETING DATA (${recordings.length} total meetings):
 ${callSummaries}`;
 
   const modelId = await getModelId();

@@ -245,7 +245,7 @@ export default function RecordingWidget({ leadId, onRecordingComplete }) {
         textTransform: 'uppercase',
         marginBottom: 'var(--space-md)'
       }}>
-        Call Recording
+        Meeting Recording
       </h4>
 
       {/* IDLE STATE */}
@@ -413,7 +413,7 @@ export default function RecordingWidget({ leadId, onRecordingComplete }) {
             Recording complete! Transcript & analysis ready.
           </div>
           <button className="btn btn-secondary" onClick={resetWidget}>
-            Record Another Call
+            Record Another Meeting
           </button>
         </div>
       )}

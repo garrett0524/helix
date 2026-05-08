@@ -2,7 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Navbar from './components/Shared/Navbar'
 import PipelinePage from './pages/PipelinePage'
-import CallAnalyticsPage from './pages/CallAnalyticsPage'
+import MeetingNotesPage from './pages/MeetingNotesPage'
 import CalendarPage from './pages/CalendarPage'
 import EmailHubPage from './pages/EmailHubPage'
 import SettingsPage from './pages/SettingsPage'
@@ -45,7 +45,7 @@ function AppLayout() {
       <main className="main-content">
         <Routes>
           <Route path="/" element={<PipelinePage />} />
-          <Route path="/analytics" element={<CallAnalyticsPage />} />
+          <Route path="/analytics" element={<MeetingNotesPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/emails" element={<EmailHubPage />} />
           <Route path="/settings" element={
