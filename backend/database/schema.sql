@@ -47,45 +47,9 @@ CREATE TABLE IF NOT EXISTS leads (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS outreach_queue (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    lead_id INTEGER NOT NULL,
-    action_type TEXT NOT NULL CHECK(action_type IN ('call', 'email')),
-    status TEXT DEFAULT 'queued' CHECK(status IN ('queued', 'approved', 'rejected', 'fired', 'completed', 'failed')),
-    scheduled_time TEXT,
-    approved_at TEXT,
-    completed_at TEXT,
-    result TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS call_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    lead_id INTEGER NOT NULL,
-    retell_call_id TEXT,
-    duration_seconds INTEGER DEFAULT 0,
-    outcome TEXT CHECK(outcome IN ('interested', 'not_interested', 'voicemail', 'no_answer', 'callback', 'wrong_number')),
-    transcript TEXT,
-    recording_url TEXT,
-    cost REAL DEFAULT 0,
-    callback_time TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS email_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    lead_id INTEGER NOT NULL,
-    instantly_message_id TEXT,
-    sequence_name TEXT,
-    step_number INTEGER,
-    status TEXT DEFAULT 'sent' CHECK(status IN ('sent', 'opened', 'replied', 'bounced')),
-    sent_at TEXT,
-    opened_at TEXT,
-    replied_at TEXT,
-    FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
-);
+-- Note: outreach_queue, call_log, and email_log tables were removed in Phase 3
+-- (TASK-09/10/11). They served the deprecated Outreach Queue, Retell Call Center,
+-- and Instantly email flows. Apollo email status now lives on leads.email_status.
 
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
@@ -118,10 +82,6 @@ CREATE INDEX IF NOT EXISTS idx_leads_pipeline_stage ON leads(pipeline_stage);
 CREATE INDEX IF NOT EXISTS idx_leads_category ON leads(category);
 CREATE INDEX IF NOT EXISTS idx_leads_lead_score ON leads(lead_score);
 CREATE INDEX IF NOT EXISTS idx_leads_place_id ON leads(place_id);
-CREATE INDEX IF NOT EXISTS idx_outreach_queue_status ON outreach_queue(status);
-CREATE INDEX IF NOT EXISTS idx_outreach_queue_lead_id ON outreach_queue(lead_id);
-CREATE INDEX IF NOT EXISTS idx_call_log_lead_id ON call_log(lead_id);
-CREATE INDEX IF NOT EXISTS idx_email_log_lead_id ON email_log(lead_id);
 
 CREATE INDEX IF NOT EXISTS idx_recordings_lead_id ON recordings(lead_id);
 CREATE INDEX IF NOT EXISTS idx_recordings_status ON recordings(status);

@@ -101,9 +101,12 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Lead not found' });
     }
 
-    const { rows: calls } = await query('SELECT * FROM call_log WHERE lead_id = $1 ORDER BY created_at DESC', [lead.id]);
-    const { rows: emails } = await query('SELECT * FROM email_log WHERE lead_id = $1 ORDER BY sent_at DESC', [lead.id]);
-    const { rows: outreach } = await query('SELECT * FROM outreach_queue WHERE lead_id = $1 ORDER BY created_at DESC', [lead.id]);
+    // NOTE: call_log, email_log, and outreach_queue tables were removed in Phase 3.
+    // Returning empty arrays for backwards-compat with the frontend until Phase 8
+    // rewrites the lead detail modal around the MSP profile + Post-Discovery cards.
+    const calls = [];
+    const emails = [];
+    const outreach = [];
 
     res.json({ data: { ...lead, calls, emails, outreach } });
   } catch (err) {

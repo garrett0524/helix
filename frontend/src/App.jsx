@@ -2,12 +2,9 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Navbar from './components/Shared/Navbar'
 import PipelinePage from './pages/PipelinePage'
-import OutreachPage from './pages/OutreachPage'
-import CallCenterPage from './pages/CallCenterPage'
 import CallAnalyticsPage from './pages/CallAnalyticsPage'
 import CalendarPage from './pages/CalendarPage'
 import EmailHubPage from './pages/EmailHubPage'
-import ScraperPage from './pages/ScraperPage'
 import SettingsPage from './pages/SettingsPage'
 import LoginPage from './pages/LoginPage'
 
@@ -48,16 +45,9 @@ function AppLayout() {
       <main className="main-content">
         <Routes>
           <Route path="/" element={<PipelinePage />} />
-          <Route path="/outreach" element={<OutreachPage />} />
-          <Route path="/calls" element={<CallCenterPage />} />
           <Route path="/analytics" element={<CallAnalyticsPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/emails" element={<EmailHubPage />} />
-          <Route path="/scraper" element={
-            <ProtectedRoute adminOnly>
-              <ScraperPage />
-            </ProtectedRoute>
-          } />
           <Route path="/settings" element={
             <ProtectedRoute adminOnly>
               <SettingsPage />

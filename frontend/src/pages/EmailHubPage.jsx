@@ -9,10 +9,16 @@ const useIsMobile = () => {
   }, []);
   return isMobile;
 };
-import SequenceStatus from '../components/EmailHub/SequenceStatus'
-import DomainHealth from '../components/EmailHub/DomainHealth'
 import LeadDetailModal from '../components/Shared/LeadDetailModal'
-import { getEmails, getLeads, updateLead, syncInstantlyStatuses } from '../api'
+import { getLeads, updateLead } from '../api'
+
+// Phase 3: SequenceStatus + DomainHealth + Instantly API calls were removed.
+// Phase 7 will fully rewrite this page around Apollo. Stubs below keep the
+// existing JSX renderable until then.
+const SequenceStatus = () => null;
+const DomainHealth = () => null;
+const getEmails = async () => ({ data: [], sequences: [], domains: [], errors: {} });
+const syncInstantlyStatuses = async () => ({ synced: 0, updated: 0 });
 
 export default function EmailHubPage() {
   const isMobile = useIsMobile();

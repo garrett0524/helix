@@ -80,16 +80,15 @@ async function scoreLead(leadId) {
   const { rows: [lead] } = await query('SELECT * FROM leads WHERE id = $1', [leadId]);
   if (!lead) return 0;
 
-  const { rows: [callbackResult] } = await query("SELECT COUNT(*) as count FROM call_log WHERE lead_id = $1 AND outcome = 'callback'", [leadId]);
-  const { rows: [callAnsweredResult] } = await query("SELECT COUNT(*) as count FROM call_log WHERE lead_id = $1 AND outcome IN ('interested', 'not_interested', 'callback')", [leadId]);
-  const { rows: [emailRepliedResult] } = await query("SELECT COUNT(*) as count FROM email_log WHERE lead_id = $1 AND status = 'replied'", [leadId]);
-  const { rows: [emailOpenedResult] } = await query("SELECT COUNT(*) as count FROM email_log WHERE lead_id = $1 AND status IN ('opened', 'replied')", [leadId]);
-
+  // NOTE: call_log and email_log tables were removed in Phase 3 (deprecated features).
+  // Engagement queries are stubbed out here to keep this service runnable.
+  // Phase 6 will fully rewrite scoring around the new two-phase model
+  // (auto_score + discovery_score) using leads.email_status and recordings data.
   const engagement = {
-    callback_requested: parseInt(callbackResult?.count || 0) > 0,
-    call_answered: parseInt(callAnsweredResult?.count || 0) > 0,
-    email_replied: parseInt(emailRepliedResult?.count || 0) > 0,
-    email_opened: parseInt(emailOpenedResult?.count || 0) > 0,
+    callback_requested: false,
+    call_answered: false,
+    email_replied: false,
+    email_opened: false,
   };
 
   const score = calculateScore(lead, engagement);

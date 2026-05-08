@@ -115,57 +115,9 @@ export const importLeads = async (file) => {
 
 export const exportLeads = () => fetchApi('/leads/export/csv');
 
-// Outreach Queue
-export const getOutreachQueue = (params = {}) => {
-  const query = new URLSearchParams(params).toString();
-  return fetchApi(`/outreach/queue${query ? '?' + query : ''}`);
-};
-
-export const addToOutreachQueue = (data) => fetchApi('/outreach/queue', {
-  method: 'POST',
-  body: JSON.stringify(data),
-});
-
-export const approveOutreach = (id) => fetchApi(`/outreach/queue/${id}/approve`, {
-  method: 'PUT',
-});
-
-export const approveBatchOutreach = (ids) => fetchApi('/outreach/queue/approve-batch', {
-  method: 'POST',
-  body: JSON.stringify({ ids }),
-});
-
-export const rejectOutreach = (id) => fetchApi(`/outreach/queue/${id}/reject`, {
-  method: 'PUT',
-});
-
-// Calls
-export const getCalls = (params = {}) => {
-  const query = new URLSearchParams(params).toString();
-  return fetchApi(`/calls${query ? '?' + query : ''}`);
-};
-
-export const getCall = (id) => fetchApi(`/calls/${id}`);
-
-export const triggerCall = (leadId) => fetchApi('/calls/trigger', {
-  method: 'POST',
-  body: JSON.stringify({ lead_id: leadId }),
-});
-
-// Emails
-export const getEmails = (params = {}) => {
-  const query = new URLSearchParams(params).toString();
-  return fetchApi(`/emails${query ? '?' + query : ''}`);
-};
-
-// Scraper
-export const runScraper = (data) => fetchApi('/scraper/run', {
-  method: 'POST',
-  body: JSON.stringify(data),
-});
-
-export const getScraperStatus = () => fetchApi('/scraper/status');
-export const getScraperHistory = () => fetchApi('/scraper/history');
+// Phase 3: Outreach Queue, Calls, Emails (Instantly), and Scraper APIs were
+// removed along with their backend routes. Apollo email status now lives on
+// leads.email_status; Phase 7 will rebuild Email Hub around Apollo.
 
 // Stats
 export const getStatsOverview = () => fetchApi('/stats/overview');
@@ -278,19 +230,11 @@ export const getEnrichBulkStatus = () => fetchApi('/apollo/enrich-bulk/status');
 
 export const getApolloStatus = () => fetchApi('/apollo/status');
 
-// ============================================================
-// Instantly Campaign Push
-// ============================================================
-export const getInstantlyCampaigns = () => fetchApi('/instantly/campaigns');
-
-export const pushToInstantly = (leadIds, campaignId) => fetchApi('/instantly/push', {
-  method: 'POST',
-  body: JSON.stringify({ leadIds, campaignId }),
-});
-
-export const pushFilteredToInstantly = (filter, campaignId) => fetchApi('/instantly/push-filtered', {
-  method: 'POST',
-  body: JSON.stringify({ filter, campaignId }),
-});
-
-export const syncInstantlyStatuses = () => fetchApi('/instantly/sync', { method: 'POST' });
+// Phase 3: Instantly Campaign Push helpers were removed along with the
+// /api/instantly backend routes. The stubs below keep PipelinePage and
+// LeadDetailModal importable until Phase 4/5/7 replace these call sites
+// with Apollo-based equivalents. Each resolves to an empty/no-op shape.
+export const getInstantlyCampaigns = async () => ({ data: [] });
+export const pushToInstantly = async () => ({ pushed: 0, errors: [] });
+export const pushFilteredToInstantly = async () => ({ pushed: 0, errors: [] });
+export const syncInstantlyStatuses = async () => ({ synced: 0, updated: 0 });

@@ -11,6 +11,7 @@
  *   1. TASK-05: Add MSP columns to leads
  *   2. TASK-06: Migrate pipeline_stage enum to MSP-specific stages
  *   3. TASK-07: Strip deprecated Instantly/Retell/scraper settings rows
+ *   4. TASK-08-11: Drop deprecated tables (outreach_queue, call_log, email_log)
  */
 
 require('dotenv').config({ path: require('path').join(__dirname, '..', '..', '.env') });
@@ -134,6 +135,16 @@ async function stripDeprecatedSettings(client) {
   console.log(`  -> Deleted ${result.rowCount} deprecated settings rows (of ${DEPRECATED_SETTINGS_KEYS.length} candidate keys).`);
 }
 
+async function dropDeprecatedTables(client) {
+  console.log('TASK-08-11: Dropping deprecated tables (outreach_queue, call_log, email_log)...');
+
+  const tables = ['outreach_queue', 'call_log', 'email_log'];
+  for (const table of tables) {
+    await client.query(`DROP TABLE IF EXISTS ${table} CASCADE`);
+    console.log(`  -> Dropped table ${table} (if it existed).`);
+  }
+}
+
 async function migrate() {
   if (!process.env.DATABASE_URL) {
     console.error('DATABASE_URL is not set. Aborting.');
@@ -152,6 +163,7 @@ async function migrate() {
     await migrateMspColumns(client);
     await migratePipelineStageEnum(client);
     await stripDeprecatedSettings(client);
+    await dropDeprecatedTables(client);
 
     await client.query('COMMIT');
 

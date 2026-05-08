@@ -29,11 +29,12 @@ router.get('/overview', async (req, res) => {
          + (by_stage['live'] || 0)) / total_leads * 100
       : 0;
 
-    const { rows: [costResult] } = await query('SELECT COALESCE(SUM(cost), 0) as total_cost FROM call_log');
-    const total_call_cost = parseFloat(costResult?.total_cost || 0);
-
-    const { rows: [callCountResult] } = await query('SELECT COUNT(*) as count FROM call_log');
-    const { rows: [emailCountResult] } = await query('SELECT COUNT(*) as count FROM email_log');
+    // Phase 3: call_log and email_log tables were dropped. These overview
+    // counters return 0 until Phase 6 wires up new sources (recordings table,
+    // leads.email_status, etc.).
+    const total_call_cost = 0;
+    const total_calls = 0;
+    const total_emails = 0;
 
     res.json({
       total_leads,
@@ -41,9 +42,9 @@ router.get('/overview', async (req, res) => {
       contacted_today,
       meetings_this_week,
       conversion_rate: Math.round(conversion_rate * 10) / 10,
-      total_call_cost: Math.round(total_call_cost * 100) / 100,
-      total_calls: parseInt(callCountResult?.count || 0),
-      total_emails: parseInt(emailCountResult?.count || 0)
+      total_call_cost,
+      total_calls,
+      total_emails,
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch stats', message: err.message });
@@ -71,13 +72,9 @@ router.get('/daily', async (req, res) => {
       ORDER BY day
     `, [days]);
 
-    const { rows: callsDaily } = await query(`
-      SELECT DATE(created_at) as day, COUNT(*) as calls_placed
-      FROM call_log
-      WHERE created_at >= NOW() - INTERVAL '1 day' * $1
-      GROUP BY DATE(created_at)
-      ORDER BY day
-    `, [days]);
+    // Phase 3: call_log was dropped. Phase 6 will rewire daily call counts
+    // to use the recordings table.
+    const callsDaily = [];
 
     const dailyMap = {};
     for (const row of leadsDaily) {
