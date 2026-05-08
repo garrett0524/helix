@@ -18,11 +18,15 @@ router.get('/overview', async (req, res) => {
     const { rows: [contactedResult] } = await query("SELECT COUNT(*) as count FROM leads WHERE last_contact_date >= CURRENT_DATE::text");
     const contacted_today = parseInt(contactedResult?.count || 0);
 
-    const { rows: [meetingsResult] } = await query("SELECT COUNT(*) as count FROM leads WHERE pipeline_stage = 'meeting_booked' AND updated_at >= NOW() - INTERVAL '7 days'");
+    const { rows: [meetingsResult] } = await query("SELECT COUNT(*) as count FROM leads WHERE pipeline_stage = 'discovery_call' AND updated_at >= NOW() - INTERVAL '7 days'");
     const meetings_this_week = parseInt(meetingsResult?.count || 0);
 
     const conversion_rate = total_leads > 0
-      ? ((by_stage['meeting_booked'] || 0) + (by_stage['closed'] || 0)) / total_leads * 100
+      ? ((by_stage['discovery_call'] || 0)
+         + (by_stage['technical_review'] || 0)
+         + (by_stage['contract_sent'] || 0)
+         + (by_stage['onboarding'] || 0)
+         + (by_stage['live'] || 0)) / total_leads * 100
       : 0;
 
     const { rows: [costResult] } = await query('SELECT COALESCE(SUM(cost), 0) as total_cost FROM call_log');

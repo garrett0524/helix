@@ -1,8 +1,8 @@
 -- Helix Database Schema
--- SQLite database for lead management and outreach tracking
+-- PostgreSQL database for MSP lead management and outreach tracking
 
 CREATE TABLE IF NOT EXISTS leads (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     business_name TEXT NOT NULL,
     category TEXT,
     address TEXT,
@@ -15,14 +15,36 @@ CREATE TABLE IF NOT EXISTS leads (
     review_count INTEGER DEFAULT 0,
     place_id TEXT UNIQUE,
     owner_name TEXT,
-    pipeline_stage TEXT DEFAULT 'new' CHECK(pipeline_stage IN ('new', 'contacted', 'interested', 'meeting_booked', 'closed', 'dead')),
+    pipeline_stage TEXT DEFAULT 'new' CHECK(pipeline_stage IN ('new', 'outreach_sent', 'responded', 'discovery_call', 'technical_review', 'contract_sent', 'onboarding', 'live', 'dead')),
     lead_score INTEGER DEFAULT 0,
     contact_attempts INTEGER DEFAULT 0,
     last_contact_date TEXT,
     last_contact_method TEXT CHECK(last_contact_method IN ('call', 'email', 'none') OR last_contact_method IS NULL),
     notes TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
+    -- Apollo enrichment columns
+    email VARCHAR(255),
+    contact_name VARCHAR(255),
+    contact_title VARCHAR(255),
+    direct_phone VARCHAR(50),
+    apollo_id VARCHAR(255),
+    enriched_at TIMESTAMP,
+    instantly_campaign_id VARCHAR(255),
+    last_email_at TIMESTAMP,
+    -- Helix MSP-specific columns
+    estimated_locations INTEGER,
+    hardware_vendors TEXT,
+    manages_wifi BOOLEAN DEFAULT false,
+    geographic_reach VARCHAR(100),
+    company_size VARCHAR(50),
+    discovery_score INTEGER DEFAULT 0,
+    compatible_hardware BOOLEAN,
+    deployment_timeline VARCHAR(100),
+    apollo_sequence_id VARCHAR(255),
+    email_status VARCHAR(50) DEFAULT 'none',
+    auto_score INTEGER DEFAULT 0,
+    decision_maker_engaged BOOLEAN DEFAULT false,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS outreach_queue (

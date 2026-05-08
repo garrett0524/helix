@@ -38,12 +38,24 @@ async function seed() {
         review_count INTEGER DEFAULT 0,
         place_id TEXT UNIQUE,
         owner_name TEXT,
-        pipeline_stage TEXT DEFAULT 'new' CHECK(pipeline_stage IN ('new', 'contacted', 'interested', 'meeting_booked', 'closed', 'dead')),
+        pipeline_stage TEXT DEFAULT 'new' CHECK(pipeline_stage IN ('new', 'outreach_sent', 'responded', 'discovery_call', 'technical_review', 'contract_sent', 'onboarding', 'live', 'dead')),
         lead_score INTEGER DEFAULT 0,
         contact_attempts INTEGER DEFAULT 0,
         last_contact_date TEXT,
         last_contact_method TEXT CHECK(last_contact_method IN ('call', 'email', 'none') OR last_contact_method IS NULL),
         notes TEXT,
+        estimated_locations INTEGER,
+        hardware_vendors TEXT,
+        manages_wifi BOOLEAN DEFAULT false,
+        geographic_reach VARCHAR(100),
+        company_size VARCHAR(50),
+        discovery_score INTEGER DEFAULT 0,
+        compatible_hardware BOOLEAN,
+        deployment_timeline VARCHAR(100),
+        apollo_sequence_id VARCHAR(255),
+        email_status VARCHAR(50) DEFAULT 'none',
+        auto_score INTEGER DEFAULT 0,
+        decision_maker_engaged BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       )
@@ -198,6 +210,18 @@ async function seed() {
       "ALTER TABLE leads ADD COLUMN IF NOT EXISTS email_status VARCHAR(50) DEFAULT 'none'",
       'ALTER TABLE leads ADD COLUMN IF NOT EXISTS instantly_campaign_id VARCHAR(255)',
       'ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_email_at TIMESTAMP',
+      // Helix MSP-specific columns (TASK-05)
+      'ALTER TABLE leads ADD COLUMN IF NOT EXISTS estimated_locations INTEGER',
+      'ALTER TABLE leads ADD COLUMN IF NOT EXISTS hardware_vendors TEXT',
+      'ALTER TABLE leads ADD COLUMN IF NOT EXISTS manages_wifi BOOLEAN DEFAULT false',
+      'ALTER TABLE leads ADD COLUMN IF NOT EXISTS geographic_reach VARCHAR(100)',
+      'ALTER TABLE leads ADD COLUMN IF NOT EXISTS company_size VARCHAR(50)',
+      'ALTER TABLE leads ADD COLUMN IF NOT EXISTS discovery_score INTEGER DEFAULT 0',
+      'ALTER TABLE leads ADD COLUMN IF NOT EXISTS compatible_hardware BOOLEAN',
+      'ALTER TABLE leads ADD COLUMN IF NOT EXISTS deployment_timeline VARCHAR(100)',
+      'ALTER TABLE leads ADD COLUMN IF NOT EXISTS apollo_sequence_id VARCHAR(255)',
+      'ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_score INTEGER DEFAULT 0',
+      'ALTER TABLE leads ADD COLUMN IF NOT EXISTS decision_maker_engaged BOOLEAN DEFAULT false',
     ];
     for (const migration of apolloMigrations) {
       try {
@@ -206,7 +230,7 @@ async function seed() {
         // Column may already exist
       }
     }
-    console.log('Apollo/email columns migration complete.');
+    console.log('Apollo/email/MSP columns migration complete.');
 
     // Seed default admin user if no users exist
     const { rows: existingUsers } = await client.query('SELECT COUNT(*) as count FROM users');
@@ -236,12 +260,6 @@ async function seed() {
     const { rows: existingSettings } = await client.query('SELECT COUNT(*) as count FROM settings');
     if (parseInt(existingSettings[0].count) === 0) {
       const defaultSettings = [
-        ['retell_api_key', ''],
-        ['retell_voice_id', ''],
-        ['instantly_api_key', ''],
-        ['scraper_default_radius', '10'],
-        ['scraper_default_geography', 'Long Island, NY'],
-        ['scraper_categories', 'bars,restaurants,gyms,fitness centers'],
         ['notification_email', ''],
         ['notification_sms', ''],
         ['anthropic_api_key', ''],

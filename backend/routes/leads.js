@@ -408,7 +408,7 @@ async function autoCreateCalendarFromStageChange(leadId, lead, newStage, notes) 
   const isGym = category.includes('gym') || category.includes('fitness') || category.includes('crossfit') || category.includes('yoga');
   const now = new Date();
 
-  if (newStage === 'meeting_booked') {
+  if (newStage === 'discovery_call') {
     const nextBiz = getNextBusinessDay(now);
     const eventDate = formatDate(nextBiz);
 
@@ -417,15 +417,15 @@ async function autoCreateCalendarFromStageChange(leadId, lead, newStage, notes) 
        VALUES ($1, 'site_visit', $2, $3, $4, '10:00', 30, true)`,
       [
         leadId,
-        `Site Visit: ${businessName}`,
-        `Auto-created when lead moved to Meeting Booked stage. Please confirm date/time with lead.`,
+        `Discovery Call: ${businessName}`,
+        `Auto-created when lead moved to Discovery Call stage. Please confirm date/time with lead.`,
         eventDate,
       ]
     );
-    console.log(`Calendar: Created site visit event for ${businessName} on ${eventDate}`);
+    console.log(`Calendar: Created discovery call event for ${businessName} on ${eventDate}`);
   }
 
-  if (newStage === 'contacted') {
+  if (newStage === 'outreach_sent') {
     const notesLower = (notes || '').toLowerCase();
     if (notesLower.includes('call back') || notesLower.includes('callback')) {
       const nextBiz = getNextBusinessDay(now);
@@ -438,7 +438,7 @@ async function autoCreateCalendarFromStageChange(leadId, lead, newStage, notes) 
         [
           leadId,
           `Callback: ${businessName}`,
-          'Auto-created when lead moved to Contacted stage with callback mention in notes.',
+          'Auto-created when lead moved to Outreach Sent stage with callback mention in notes.',
           eventDate,
           eventTime,
         ]
