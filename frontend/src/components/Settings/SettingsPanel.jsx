@@ -492,23 +492,6 @@ export default function SettingsPanel() {
         </form>
       </Section>
 
-      {/* Retell AI */}
-      <Section title="Retell AI (Voice Calls)">
-        <Field label="API Key">
-          <input type="password" value={settings.retell_api_key || ''} onChange={e => handleChange('retell_api_key', e.target.value)} placeholder="Enter Retell AI API key" />
-        </Field>
-        <Field label="Voice ID">
-          <input type="text" value={settings.retell_voice_id || ''} onChange={e => handleChange('retell_voice_id', e.target.value)} placeholder="ElevenLabs voice ID" />
-        </Field>
-      </Section>
-
-      {/* Instantly.ai */}
-      <Section title="Instantly.ai (Email Outreach)">
-        <Field label="API Key">
-          <input type="password" value={settings.instantly_api_key || ''} onChange={e => handleChange('instantly_api_key', e.target.value)} placeholder="Enter Instantly.ai API key" />
-        </Field>
-      </Section>
-
       {/* Apollo.io */}
       <Section title="Apollo.io (Lead Enrichment)">
         <Field label="API Key">
@@ -549,19 +532,6 @@ export default function SettingsPanel() {
         <p style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
           Get your API key from app.apollo.io &rarr; Settings &rarr; API Keys
         </p>
-      </Section>
-
-      {/* Scraper */}
-      <Section title="Scraper Configuration">
-        <Field label="Default Geography">
-          <input type="text" value={settings.scraper_default_geography || ''} onChange={e => handleChange('scraper_default_geography', e.target.value)} />
-        </Field>
-        <Field label="Default Radius (miles)">
-          <input type="number" value={settings.scraper_default_radius || '10'} onChange={e => handleChange('scraper_default_radius', e.target.value)} />
-        </Field>
-        <Field label="Categories (comma-separated)">
-          <input type="text" value={settings.scraper_categories || ''} onChange={e => handleChange('scraper_categories', e.target.value)} />
-        </Field>
       </Section>
 
       {/* Lead Scoring Rules */}

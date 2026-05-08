@@ -7,13 +7,7 @@ const router = express.Router();
 
 // Default settings
 const DEFAULT_SETTINGS = {
-  retell_api_key: '',
-  retell_voice_id: '',
-  instantly_api_key: '',
   apollo_api_key: '',
-  scraper_default_radius: '10',
-  scraper_default_geography: 'Long Island, NY',
-  scraper_categories: 'bars,restaurants,gyms,fitness centers',
   notification_email: '',
   notification_sms: '',
   anthropic_api_key: '',
