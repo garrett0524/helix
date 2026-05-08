@@ -56,6 +56,18 @@ router.get('/', async (req, res) => {
       params.push(`%${req.query.search}%`);
       paramIdx++;
     }
+    if (req.query.email_status) {
+      if (req.query.email_status === 'none') {
+        sql += ` AND (email_status IS NULL OR email_status = '')`;
+      } else {
+        sql += ` AND email_status = $${paramIdx++}`;
+        params.push(req.query.email_status);
+      }
+    }
+    if (req.query.apollo_sequence_id) {
+      sql += ` AND apollo_sequence_id = $${paramIdx++}`;
+      params.push(req.query.apollo_sequence_id);
+    }
 
     sql += ' ORDER BY created_at DESC';
 
@@ -81,6 +93,18 @@ router.get('/', async (req, res) => {
     if (req.query.stage) {
       countSql += ` AND pipeline_stage = $${countIdx++}`;
       countParams.push(req.query.stage);
+    }
+    if (req.query.email_status) {
+      if (req.query.email_status === 'none') {
+        countSql += ` AND (email_status IS NULL OR email_status = '')`;
+      } else {
+        countSql += ` AND email_status = $${countIdx++}`;
+        countParams.push(req.query.email_status);
+      }
+    }
+    if (req.query.apollo_sequence_id) {
+      countSql += ` AND apollo_sequence_id = $${countIdx++}`;
+      countParams.push(req.query.apollo_sequence_id);
     }
     const { rows: [countResult] } = await query(countSql, countParams);
 

@@ -241,6 +241,10 @@ export const pushToApolloSequence = (leadIds, sequenceId) => fetchApi('/apollo/p
   body: JSON.stringify({ leadIds, sequenceId }),
 });
 
+export const syncApolloEmailStatuses = () => fetchApi('/apollo/sync-emails', {
+  method: 'POST',
+});
+
 // Phase 3: Instantly Campaign Push helpers were removed along with the
 // /api/instantly backend routes. These stubs remain only for any legacy
 // import sites still being migrated; the Pipeline page now uses Apollo.
