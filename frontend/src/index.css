@@ -1,21 +1,23 @@
 /* ============================================================
-   TesseraFlow Design System — "Dark Command Center"
+   Helix Design System — "Fractals Dark Command Center"
+   Cloned from TesseraFlow, rebranded for Fractals MSP outreach.
+   Primary accent shifted from indigo (#6366f1) to purple (#7c3aed).
    ============================================================ */
 
 /* ── Design Tokens ── */
 :root {
-  /* Backgrounds (layered depth) */
-  --bg-app: #0a0b0f;
-  --bg-sidebar: #0e1015;
-  --bg-card: #13151c;
-  --bg-card-elevated: #181b24;
-  --bg-input: #1a1e28;
-  --bg-hover: #1e2230;
+  /* Backgrounds (layered depth) — Helix deep dark */
+  --bg-app: #0a0f1a;
+  --bg-sidebar: #0c1320;
+  --bg-card: #111827;
+  --bg-card-elevated: #161f30;
+  --bg-input: #1a2336;
+  --bg-hover: #202b42;
 
   /* Legacy aliases (so existing classNames keep working) */
-  --bg-primary: #0a0b0f;
-  --bg-secondary: #13151c;
-  --bg-tertiary: #181b24;
+  --bg-primary: #0a0f1a;
+  --bg-secondary: #111827;
+  --bg-tertiary: #161f30;
 
   /* Text */
   --text-primary: #f0f2f5;
@@ -24,37 +26,53 @@
   --text-disabled: #3d4455;
 
   /* Borders */
-  --border-default: #1e2230;
-  --border-subtle: #252a36;
-  --border-focus: #6366f1;
+  --border-default: #1e2538;
+  --border-subtle: #252d44;
+  --border-focus: #7c3aed;
 
-  /* Accent */
-  --accent-primary: #818cf8;
-  --accent-hover: #6366f1;
+  /* Accent — Helix purple primary, cyan secondary */
+  --accent-primary: #8b5cf6;       /* lighter purple for text/icons on dark */
+  --accent-hover: #7c3aed;         /* core Helix purple */
+  --accent-active: #6d28d9;        /* pressed/active state */
+  --accent-secondary: #06b6d4;     /* cyan secondary */
+  --accent-secondary-hover: #0891b2;
 
   /* Semantic */
-  --color-success: #34d399;
-  --color-warning: #fbbf24;
-  --color-error: #f87171;
-  --color-info: #60a5fa;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #06b6d4;
 
-  /* Pipeline Stage Colors */
-  --stage-new: #6b7280;
-  --stage-contacted: #60a5fa;
-  --stage-interested: #fbbf24;
-  --stage-meeting: #34d399;
-  --stage-closed: #a78bfa;
-  --stage-dead: #f87171;
+  /* Pipeline Stage Colors — Helix MSP pipeline
+     new → outreach_sent → responded → discovery_call →
+     technical_review → contract_sent → onboarding → live → dead */
+  --stage-new: #6b7280;             /* gray */
+  --stage-outreach_sent: #3b82f6;   /* blue */
+  --stage-responded: #06b6d4;       /* cyan */
+  --stage-discovery_call: #f59e0b;  /* yellow/amber */
+  --stage-technical_review: #f97316;/* orange */
+  --stage-contract_sent: #a855f7;   /* purple */
+  --stage-onboarding: #6366f1;      /* indigo */
+  --stage-live: #10b981;            /* green */
+  --stage-dead: #ef4444;            /* red */
+
+  /* Legacy stage aliases (kept temporarily so old TesseraFlow classes
+     don't break before component-level rename. Map old → nearest new.) */
+  --stage-contacted: var(--stage-outreach_sent);
+  --stage-interested: var(--stage-discovery_call);
+  --stage-meeting: var(--stage-live);
+  --stage-closed: var(--stage-contract_sent);
 
   /* Gradients */
-  --gradient-primary: linear-gradient(135deg, #6366f1, #818cf8);
-  --gradient-success: linear-gradient(135deg, #059669, #34d399);
+  --gradient-primary: linear-gradient(135deg, #7c3aed, #a855f7);
+  --gradient-accent: linear-gradient(135deg, #7c3aed, #06b6d4);
+  --gradient-success: linear-gradient(135deg, #059669, #10b981);
 
   /* Shadows */
   --shadow-card: 0 1px 3px rgba(0,0,0,0.3), 0 0 1px rgba(255,255,255,0.03) inset;
   --shadow-elevated: 0 4px 12px rgba(0,0,0,0.4);
   --shadow-modal: 0 24px 48px rgba(0,0,0,0.5);
-  --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.08);
+  --shadow-glow: 0 0 20px rgba(124, 58, 237, 0.12);
 
   /* Typography */
   --font-heading: 'DM Sans', sans-serif;
@@ -171,7 +189,7 @@ h4 {
 .btn-primary:hover {
   filter: brightness(1.1);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99,102,241,0.3);
+  box-shadow: 0 4px 12px rgba(124,58,237,0.35);
 }
 .btn-primary:active { transform: translateY(0); filter: brightness(0.95); }
 
@@ -221,7 +239,7 @@ select, textarea {
 }
 input:focus, select:focus, textarea:focus {
   border-color: var(--accent-hover);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18);
 }
 input::placeholder, textarea::placeholder { color: var(--text-disabled); }
 select { cursor: pointer; }
@@ -251,12 +269,29 @@ select { cursor: pointer; }
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-.badge-new { background: rgba(107,114,128,0.1); color: #9ca3af; }
-.badge-contacted { background: rgba(96,165,250,0.1); color: #60a5fa; }
-.badge-interested { background: rgba(251,191,36,0.1); color: #fbbf24; }
-.badge-meeting_booked { background: rgba(52,211,153,0.1); color: #34d399; }
-.badge-closed { background: rgba(167,139,250,0.1); color: #a78bfa; }
-.badge-dead { background: rgba(248,113,113,0.1); color: #f87171; }
+/* Helix MSP pipeline stage badges */
+.badge-new { background: rgba(107,114,128,0.12); color: #9ca3af; }
+.badge-outreach_sent { background: rgba(59,130,246,0.12); color: #60a5fa; }
+.badge-responded { background: rgba(6,182,212,0.12); color: #22d3ee; }
+.badge-discovery_call { background: rgba(245,158,11,0.12); color: #fbbf24; }
+.badge-technical_review { background: rgba(249,115,22,0.12); color: #fb923c; }
+.badge-contract_sent { background: rgba(168,85,247,0.12); color: #c084fc; }
+.badge-onboarding { background: rgba(99,102,241,0.12); color: #818cf8; }
+.badge-live { background: rgba(16,185,129,0.12); color: #34d399; }
+.badge-dead { background: rgba(239,68,68,0.12); color: #f87171; }
+
+/* Legacy badge aliases — keep until components are renamed */
+.badge-contacted { background: rgba(59,130,246,0.12); color: #60a5fa; }
+.badge-interested { background: rgba(245,158,11,0.12); color: #fbbf24; }
+.badge-meeting_booked { background: rgba(16,185,129,0.12); color: #34d399; }
+.badge-closed { background: rgba(168,85,247,0.12); color: #c084fc; }
+
+/* Email status badges (Apollo sync) */
+.badge-email-none { background: rgba(107,114,128,0.12); color: #9ca3af; }
+.badge-email-sent { background: rgba(59,130,246,0.12); color: #60a5fa; }
+.badge-email-opened { background: rgba(6,182,212,0.12); color: #22d3ee; }
+.badge-email-replied { background: rgba(16,185,129,0.12); color: #34d399; }
+.badge-email-bounced { background: rgba(239,68,68,0.12); color: #f87171; }
 
 /* ── Stat Cards ── */
 .stat-card {
