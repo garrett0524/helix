@@ -114,6 +114,33 @@ function pickBestPerson(people) {
 // Search strategies (each returns an array of people or [])
 // ---------------------------------------------------------------------------
 
+// MSP / ISP / IT Services targeting filters
+const MSP_INDUSTRIES = [
+  'Information Technology and Services',
+  'Internet',
+  'Computer Networking',
+  'Telecommunications',
+];
+const MSP_KEYWORDS = [
+  'managed service provider',
+  'MSP',
+  'ISP',
+  'wireless internet',
+  'WISP',
+  'IT services',
+];
+const MSP_TITLES = [
+  'owner',
+  'ceo',
+  'president',
+  'founder',
+  'cto',
+  'it director',
+  'director of operations',
+  'vp of technology',
+  'managing partner',
+];
+
 async function searchByName(apiKey, lead) {
   const response = await apolloFetchWithRetry(`${APOLLO_BASE}/mixed_people/api_search`, {
     method: 'POST',
@@ -124,8 +151,10 @@ async function searchByName(apiKey, lead) {
     },
     body: JSON.stringify({
       q_organization_name: lead.business_name,
-      person_locations: [`${lead.city || 'New York'}, New York`],
-      person_titles: ['owner', 'general manager', 'manager', 'proprietor', 'partner'],
+      ...(lead.city ? { person_locations: [lead.city] } : {}),
+      person_titles: MSP_TITLES,
+      organization_industries: MSP_INDUSTRIES,
+      q_organization_keyword_tags: MSP_KEYWORDS,
       page: 1,
       per_page: 5,
     }),
@@ -149,7 +178,8 @@ async function searchByDomain(apiKey, lead) {
     },
     body: JSON.stringify({
       q_organization_domains: domain,
-      person_locations: [`${lead.city || 'New York'}, New York`],
+      ...(lead.city ? { person_locations: [lead.city] } : {}),
+      person_titles: MSP_TITLES,
       page: 1,
       per_page: 5,
     }),
@@ -524,6 +554,290 @@ async function checkStatus() {
 }
 
 // ---------------------------------------------------------------------------
+// getSequences – list available Apollo email sequences (campaigns)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns Apollo email sequences with rolled-up stats.
+ * Endpoint: GET /api/v1/emailer_campaigns
+ */
+async function getSequences() {
+  try {
+    const apiKey = await getApiKey();
+
+    const response = await apolloFetchWithRetry(`${APOLLO_BASE}/emailer_campaigns`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
+        'X-Api-Key': apiKey,
+      },
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      console.error(`[Apollo] getSequences failed (${response.status}): ${body}`);
+      return [];
+    }
+
+    const data = await response.json();
+    const campaigns = data.emailer_campaigns || data.campaigns || [];
+
+    return campaigns.map((c) => ({
+      id: c.id,
+      name: c.name || c.label || 'Untitled sequence',
+      sent: c.num_steps_sent ?? c.unique_emailed_count ?? c.emailed_count ?? 0,
+      opened: c.unique_opened_count ?? c.opened_count ?? 0,
+      replied: c.unique_replied_count ?? c.replied_count ?? 0,
+      bounced: c.bounced_count ?? c.unique_bounced_count ?? 0,
+    }));
+  } catch (err) {
+    console.error('[Apollo] getSequences error:', err.message);
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// pushToSequence – add leads to an Apollo sequence by contact_id
+// ---------------------------------------------------------------------------
+
+/**
+ * For each lead: ensure an apollo_id exists (revealing if needed),
+ * then add the contact to the given sequence.
+ * Endpoint: POST /api/v1/emailer_campaigns/{id}/add_contact_ids
+ *
+ * @param {number[]} leadIds
+ * @param {string}   sequenceId
+ * @returns {Promise<{ pushed: number, failed: Array<{ leadId: number, reason: string }> }>}
+ */
+async function pushToSequence(leadIds, sequenceId) {
+  const result = { pushed: 0, failed: [] };
+
+  if (!Array.isArray(leadIds) || leadIds.length === 0) return result;
+  if (!sequenceId) {
+    console.error('[Apollo] pushToSequence called with no sequenceId');
+    return result;
+  }
+
+  let apiKey;
+  try {
+    apiKey = await getApiKey();
+  } catch (err) {
+    console.error('[Apollo] pushToSequence: cannot get API key:', err.message);
+    leadIds.forEach((id) => result.failed.push({ leadId: id, reason: err.message }));
+    return result;
+  }
+
+  for (let i = 0; i < leadIds.length; i += BATCH_SIZE) {
+    if (i > 0) await sleep(BATCH_DELAY_MS);
+    const batch = leadIds.slice(i, i + BATCH_SIZE);
+
+    for (const leadId of batch) {
+      try {
+        const { rows: [lead] } = await query(
+          'SELECT id, business_name, city, website, apollo_id FROM leads WHERE id = $1',
+          [leadId]
+        );
+
+        if (!lead) {
+          result.failed.push({ leadId, reason: 'Lead not found' });
+          continue;
+        }
+
+        let apolloId = lead.apollo_id;
+
+        // Resolve a person_id if we don't have one yet
+        if (!apolloId) {
+          let people = await searchByName(apiKey, lead);
+          if (people.length === 0) people = await searchByDomain(apiKey, lead);
+          if (people.length === 0) people = await searchByOrgEnrichment(apiKey, lead);
+
+          let person = pickBestPerson(people);
+          if (!person) {
+            result.failed.push({ leadId, reason: 'No Apollo person found' });
+            continue;
+          }
+
+          // Reveal to ensure contact is in Apollo's contact pool
+          person = await revealPerson(apiKey, person);
+          apolloId = person.id;
+
+          if (apolloId) {
+            await query(
+              'UPDATE leads SET apollo_id = $1, updated_at = NOW() WHERE id = $2',
+              [apolloId, leadId]
+            );
+          }
+        }
+
+        if (!apolloId) {
+          result.failed.push({ leadId, reason: 'Could not resolve Apollo person_id' });
+          continue;
+        }
+
+        const response = await apolloFetchWithRetry(
+          `${APOLLO_BASE}/emailer_campaigns/${encodeURIComponent(sequenceId)}/add_contact_ids`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache',
+              'X-Api-Key': apiKey,
+            },
+            body: JSON.stringify({ contact_ids: [apolloId] }),
+          }
+        );
+
+        if (!response.ok) {
+          const body = await response.text();
+          console.error(`[Apollo] pushToSequence failed for lead ${leadId} (${response.status}): ${body}`);
+          result.failed.push({ leadId, reason: `Apollo ${response.status}` });
+          continue;
+        }
+
+        await query(
+          `UPDATE leads
+              SET apollo_sequence_id = $1,
+                  email_status       = 'sent',
+                  updated_at         = NOW()
+            WHERE id = $2`,
+          [sequenceId, leadId]
+        );
+
+        result.pushed++;
+      } catch (err) {
+        console.error(`[Apollo] pushToSequence error for lead ${leadId}:`, err.message);
+        result.failed.push({ leadId, reason: err.message });
+      }
+    }
+  }
+
+  console.log(`[Apollo] pushToSequence done: pushed=${result.pushed}, failed=${result.failed.length}`);
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// syncEmailStatuses – pull per-contact email activity and update leads
+// ---------------------------------------------------------------------------
+
+/**
+ * Maps Apollo activity statuses to our normalized email_status values:
+ *   bounced  → bounced
+ *   replied  → replied
+ *   opened/clicked → opened
+ *   delivered/sent → sent
+ *   anything else  → none
+ */
+function mapApolloStatus(raw) {
+  if (!raw) return 'none';
+  const s = String(raw).toLowerCase();
+  if (s.includes('bounce')) return 'bounced';
+  if (s.includes('repli')) return 'replied';
+  if (s.includes('open') || s.includes('click')) return 'opened';
+  if (s.includes('deliver') || s.includes('sent')) return 'sent';
+  return 'none';
+}
+
+/**
+ * Picks the most-progressed status from a contact's activity payload.
+ * Priority: replied > bounced > opened > sent > none
+ */
+function highestStatus(statuses) {
+  const order = { none: 0, sent: 1, opened: 2, bounced: 3, replied: 4 };
+  return statuses.reduce((best, s) => (order[s] > order[best] ? s : best), 'none');
+}
+
+async function syncEmailStatuses() {
+  let apiKey;
+  try {
+    apiKey = await getApiKey();
+  } catch (err) {
+    console.error('[Apollo] syncEmailStatuses: cannot get API key:', err.message);
+    return { updated: 0 };
+  }
+
+  const { rows: leads } = await query(
+    `SELECT id, apollo_id, apollo_sequence_id, email_status
+       FROM leads
+      WHERE apollo_sequence_id IS NOT NULL`
+  );
+
+  let updated = 0;
+
+  for (let i = 0; i < leads.length; i += BATCH_SIZE) {
+    if (i > 0) await sleep(BATCH_DELAY_MS);
+    const batch = leads.slice(i, i + BATCH_SIZE);
+
+    for (const lead of batch) {
+      try {
+        if (!lead.apollo_id) continue;
+
+        // Apollo's contact endpoint returns the contact with embedded activity.
+        // If the dedicated activity endpoint is unavailable, this still surfaces
+        // the rolled-up email_status fields on the contact object.
+        const response = await apolloFetchWithRetry(
+          `${APOLLO_BASE}/contacts/${encodeURIComponent(lead.apollo_id)}`,
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache',
+              'X-Api-Key': apiKey,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          // Don't spam logs for missing contacts; just skip.
+          continue;
+        }
+
+        const data = await response.json();
+        const contact = data.contact || data.person || data;
+
+        // Collect any status signals Apollo exposes on the contact payload.
+        const signals = [];
+        if (contact?.email_bounced || contact?.bounced) signals.push('bounced');
+        if (contact?.email_replied || contact?.replied) signals.push('replied');
+        if (contact?.email_opened || contact?.opened) signals.push('opened');
+        if (contact?.email_clicked || contact?.clicked) signals.push('opened');
+        if (contact?.email_sent || contact?.delivered) signals.push('sent');
+
+        // Also accept a free-text status field if present.
+        if (contact?.email_status) signals.push(mapApolloStatus(contact.email_status));
+        if (contact?.last_email_status) signals.push(mapApolloStatus(contact.last_email_status));
+
+        // Iterate any embedded activity log entries.
+        const activities = contact?.email_activity || contact?.activities || [];
+        if (Array.isArray(activities)) {
+          for (const a of activities) {
+            signals.push(mapApolloStatus(a.type || a.event || a.status));
+          }
+        }
+
+        const next = highestStatus(signals.length ? signals : ['none']);
+
+        if (next !== lead.email_status) {
+          const res = await query(
+            `UPDATE leads
+                SET email_status = $1,
+                    updated_at   = NOW()
+              WHERE id = $2`,
+            [next, lead.id]
+          );
+          if (res.rowCount > 0) updated++;
+        }
+      } catch (err) {
+        console.error(`[Apollo] syncEmailStatuses error for lead ${lead.id}:`, err.message);
+      }
+    }
+  }
+
+  console.log(`[Apollo] syncEmailStatuses done: ${updated} leads updated`);
+  return { updated };
+}
+
+// ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
 
@@ -531,4 +845,7 @@ module.exports = {
   enrichLead,
   enrichBulk,
   checkStatus,
+  getSequences,
+  pushToSequence,
+  syncEmailStatuses,
 };

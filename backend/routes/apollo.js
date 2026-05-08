@@ -8,7 +8,14 @@
  */
 
 const express = require('express');
-const { enrichLead, enrichBulk, checkStatus } = require('../services/apollo');
+const {
+  enrichLead,
+  enrichBulk,
+  checkStatus,
+  getSequences,
+  pushToSequence,
+  syncEmailStatuses,
+} = require('../services/apollo');
 
 const router = express.Router();
 
@@ -135,6 +142,50 @@ router.get('/status', async (req, res) => {
   try {
     const result = await checkStatus();
     res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Sequences (Phase 4)
+// ---------------------------------------------------------------------------
+
+// GET /api/apollo/sequences
+router.get('/sequences', async (req, res) => {
+  try {
+    const sequences = await getSequences();
+    res.json({ data: sequences });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/apollo/push-sequence
+// body: { leadIds: number[], sequenceId: string }
+router.post('/push-sequence', async (req, res) => {
+  try {
+    const { leadIds, sequenceId } = req.body || {};
+
+    if (!Array.isArray(leadIds) || leadIds.length === 0) {
+      return res.status(400).json({ error: 'leadIds must be a non-empty array.' });
+    }
+    if (!sequenceId || typeof sequenceId !== 'string') {
+      return res.status(400).json({ error: 'sequenceId is required.' });
+    }
+
+    const result = await pushToSequence(leadIds, sequenceId);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/apollo/sync-emails
+router.post('/sync-emails', async (req, res) => {
+  try {
+    const result = await syncEmailStatuses();
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
