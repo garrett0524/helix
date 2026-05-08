@@ -94,7 +94,7 @@ app.use((req, res) => {
 
 // Start server (no more SQLite init needed — PostgreSQL connects on demand via pool)
 app.listen(PORT, () => {
-  console.log(`TesseraFlow API running on http://localhost:${PORT}`);
+  console.log(`Helix API running on http://localhost:${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 

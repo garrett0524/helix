@@ -224,7 +224,7 @@ export default function PipelinePage() {
             <button
               className="btn btn-secondary"
               onClick={() => { setShowEnrichMenu(!showEnrichMenu); setShowPushMenu(false); }}
-              style={{ fontSize: '13px', background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', color: 'white', border: 'none' }}
+              style={{ fontSize: '13px', background: 'linear-gradient(135deg, #8b5cf6, var(--accent-hover))', color: 'white', border: 'none' }}
             >
               Enrich &#9662;
             </button>

@@ -48,7 +48,7 @@ export default function ScraperControl({ onScraperDone }) {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'tesseraflow-leads.csv';
+      a.download = 'helix-leads.csv';
       a.click();
       window.URL.revokeObjectURL(url);
     } catch (err) {

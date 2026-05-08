@@ -1,23 +1,17 @@
 import { useState, useEffect } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { LayoutDashboard, BarChart3, Calendar, Mail, Globe, Settings, Megaphone, Phone, LogOut, KeyRound, Menu, X } from 'lucide-react'
+import { LayoutDashboard, FileText, Calendar, Mail, Settings, LogOut, KeyRound, Menu, X } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { changePassword } from '../../api'
-const tesseraIcon = '/logo-white.png'
+const fractalsLogo = '/Fractals-white.svg'
 import './Navbar.css'
 
 const allNavItems = [
   { path: '/', label: 'Pipeline', icon: LayoutDashboard },
-  { path: '/analytics', label: 'Call Analytics', icon: BarChart3 },
+  { path: '/analytics', label: 'Meeting Notes', icon: FileText },
   { path: '/calendar', label: 'Calendar', icon: Calendar },
   { path: '/emails', label: 'Email Hub', icon: Mail },
-  { path: '/scraper', label: 'Scraper Control', icon: Globe, adminOnly: true },
   { path: '/settings', label: 'Settings', icon: Settings, adminOnly: true },
-]
-
-const comingSoonItems = [
-  { path: '/outreach', label: 'Outreach Queue', icon: Megaphone },
-  { path: '/calls', label: 'Call Center', icon: Phone },
 ]
 
 export default function Navbar() {
@@ -81,11 +75,10 @@ export default function Navbar() {
 
   // Get current page title for mobile header
   const currentPageTitle = (() => {
-    const allItems = [...allNavItems, ...comingSoonItems];
-    const match = allItems.find(item =>
+    const match = allNavItems.find(item =>
       item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path)
     );
-    return match?.label || 'TesseraFlow';
+    return match?.label || 'Helix';
   })();
 
   return (
@@ -100,7 +93,7 @@ export default function Navbar() {
           <Menu size={22} strokeWidth={2} />
         </button>
         <div className="mobile-header-brand">
-          <img src={tesseraIcon} alt="TesseraFlow" className="sidebar-logo" style={{ width: '28px', height: '28px' }} />
+          <img src={fractalsLogo} alt="Fractals" className="sidebar-logo" style={{ height: '24px', width: 'auto' }} />
           <span className="mobile-header-title">{currentPageTitle}</span>
         </div>
       </div>
@@ -112,10 +105,10 @@ export default function Navbar() {
 
       <nav className={`sidebar ${mobileOpen ? 'sidebar-mobile-open' : ''}`}>
         <div className="sidebar-header">
-          <img src={tesseraIcon} alt="TesseraFlow" className="sidebar-logo" />
+          <img src={fractalsLogo} alt="Fractals" className="sidebar-logo" style={{ height: '28px', width: 'auto' }} />
           <div>
-            <div className="sidebar-title">TesseraFlow</div>
-            <div className="sidebar-subtitle">Lead Pipeline</div>
+            <div className="sidebar-title">Helix</div>
+            <div className="sidebar-subtitle">MSP Pipeline</div>
             <div className="sidebar-accent-line" />
           </div>
           <button
@@ -135,32 +128,6 @@ export default function Navbar() {
                   to={item.path}
                   end={item.path === '/'}
                   className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-                >
-                  <span className="sidebar-icon">
-                    <Icon size={18} strokeWidth={1.5} />
-                  </span>
-                  <span className="sidebar-label">{item.label}</span>
-                </NavLink>
-              </li>
-            )
-          })}
-
-          {/* Divider */}
-          <li>
-            <div className="sidebar-divider" />
-          </li>
-          <li>
-            <div className="sidebar-group-label">Coming Soon</div>
-          </li>
-
-          {comingSoonItems.map(item => {
-            const Icon = item.icon
-            return (
-              <li key={item.path}>
-                <NavLink
-                  to={item.path}
-                  className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-                  style={{ opacity: 0.4 }}
                 >
                   <span className="sidebar-icon">
                     <Icon size={18} strokeWidth={1.5} />
@@ -193,7 +160,7 @@ export default function Navbar() {
               width: '32px',
               height: '32px',
               borderRadius: '50%',
-              background: user?.avatar_color || '#6366f1',
+              background: user?.avatar_color || 'var(--accent-hover)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',

@@ -1,4 +1,4 @@
--- TesseraFlow Database Schema
+-- Helix Database Schema
 -- SQLite database for lead management and outreach tracking
 
 CREATE TABLE IF NOT EXISTS leads (

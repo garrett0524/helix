@@ -1,7 +1,7 @@
 /**
  * Instantly.ai Email Status Sync Service (v2 API)
  *
- * Syncs email statuses from Instantly campaigns back to TesseraFlow leads.
+ * Syncs email statuses from Instantly campaigns back to Helix leads.
  * Handles both manual sync and webhook-based real-time updates.
  * API key passed via Authorization header (Bearer token).
  */

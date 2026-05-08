@@ -547,7 +547,7 @@ export default function LeadDetailModal({ lead: initialLead, onClose, onSave }) 
                   onClick={handleEnrich}
                   disabled={enriching}
                   style={{
-                    background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
+                    background: 'linear-gradient(135deg, #8b5cf6, var(--accent-hover))',
                     color: 'white',
                     border: 'none',
                     fontSize: '12px',

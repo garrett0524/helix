@@ -1,6 +1,6 @@
 module.exports = {
   apps: [{
-    name: 'tesseraflow',
+    name: 'helix',
     script: 'backend/server.js',
     env: {
       NODE_ENV: 'production',

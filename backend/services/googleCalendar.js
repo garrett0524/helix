@@ -82,7 +82,7 @@ async function buildEventBody(event) {
   if (event.phone) lines.push(`Phone: ${event.phone}`);
   if (event.category) lines.push(`Category: ${event.category}`);
   lines.push('');
-  lines.push('Created by TesseraFlow');
+  lines.push('Created by Helix');
 
   const startDateTime = `${event.event_date}T${event.event_time}:00`;
   const durationMs = (event.duration_minutes || 15) * 60 * 1000;

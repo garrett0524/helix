@@ -246,7 +246,7 @@ router.post('/import', requireAdmin, upload.single('file'), async (req, res) => 
       try {
         const row = records[i];
 
-        // Support both TesseraFlow and Apollo CSV column names
+        // Support both Helix and Apollo CSV column names
         const lead = {
           business_name: row.business_name || row.name || row.businessname || row.name_for_emails || row.company || row.company_name || null,
           category: row.category || row.type || row.subtypes || null,
@@ -382,7 +382,7 @@ router.get('/export/csv', async (req, res) => {
     }
 
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename=tesseraflow-leads.csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=helix-leads.csv');
     res.send(csv);
   } catch (err) {
     res.status(500).json({ error: 'Export failed', message: err.message });

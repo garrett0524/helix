@@ -1,5 +1,5 @@
 /**
- * TesseraFlow Lead Scoring Engine
+ * Helix Lead Scoring Engine
  *
  * Score range: 0-100
  * Scoring factors from spec:

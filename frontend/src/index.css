@@ -1,7 +1,7 @@
 /* ============================================================
    Helix Design System — "Fractals Dark Command Center"
-   Cloned from TesseraFlow, rebranded for Fractals MSP outreach.
-   Primary accent shifted from indigo (#6366f1) to purple (#7c3aed).
+   Built for Fractals MSP outreach.
+   Primary accent: purple (#7c3aed).
    ============================================================ */
 
 /* ── Design Tokens ── */
@@ -56,7 +56,7 @@
   --stage-live: #10b981;            /* green */
   --stage-dead: #ef4444;            /* red */
 
-  /* Legacy stage aliases (kept temporarily so old TesseraFlow classes
+  /* Legacy stage aliases (kept temporarily so old classes
      don't break before component-level rename. Map old → nearest new.) */
   --stage-contacted: var(--stage-outreach_sent);
   --stage-interested: var(--stage-discovery_call);

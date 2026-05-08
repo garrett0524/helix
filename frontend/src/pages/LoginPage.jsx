@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import tesseraIcon from '../assets/icon-white-transparent.png';
+import fractalsLogo from '../assets/Fractals-white.svg';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -51,31 +51,30 @@ export default function LoginPage() {
             gap: '20px',
           }}>
             <div style={{
-              width: '80px',
-              height: '80px',
-              borderRadius: '20px',
+              width: '120px',
+              height: '120px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              background: 'radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.15), transparent 70%)',
-              filter: 'drop-shadow(0 0 24px rgba(99, 102, 241, 0.3))',
+              background: 'radial-gradient(circle at 50% 50%, rgba(124, 58, 237, 0.18), transparent 70%)',
+              filter: 'drop-shadow(0 0 24px rgba(124, 58, 237, 0.35))',
             }}>
-              <img src={tesseraIcon} alt="TesseraFlow" style={{
-                width: '72px',
-                height: '72px',
+              <img src={fractalsLogo} alt="Fractals" style={{
+                width: '110px',
+                height: 'auto',
                 objectFit: 'contain',
               }} />
             </div>
-            <div>
+            <div style={{ textAlign: 'center' }}>
               <div style={{
                 fontFamily: 'var(--font-heading)',
-                fontSize: '28px',
+                fontSize: '32px',
                 fontWeight: 600,
                 color: 'var(--text-primary)',
                 letterSpacing: '-0.5px',
                 marginBottom: '8px',
               }}>
-                TesseraFlow
+                Helix
               </div>
               <p style={{
                 fontSize: '14px',
@@ -172,7 +171,7 @@ export default function LoginPage() {
           fontSize: '12px',
           color: 'var(--text-tertiary)',
         }}>
-          Tessera Ventures
+          Fractals
         </p>
       </div>
     </div>

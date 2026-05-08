@@ -1,6 +1,6 @@
-# TesseraFlow
+# Helix
 
-AI-powered lead aggregation and warm outreach system for DePIN/Wi-Fi offload hardware placement on Long Island, NY.
+AI-powered MSP lead aggregation and warm outreach system for the Fractals team.
 
 ## Quick Start
 

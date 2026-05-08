@@ -1,5 +1,5 @@
 /**
- * TesseraFlow Database Seed Script
+ * Helix Database Seed Script
  *
  * Creates all tables if they don't exist and seeds the default admin user.
  * Safe to run multiple times (idempotent).
@@ -20,7 +20,7 @@ async function seed() {
   const client = await pool.connect();
 
   try {
-    console.log('Running TesseraFlow database seed...');
+    console.log('Running Helix database seed...');
 
     // Create all tables
     await client.query(`

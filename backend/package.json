@@ -1,7 +1,7 @@
 {
-  "name": "tesseraflow-backend",
+  "name": "helix-backend",
   "version": "1.0.0",
-  "description": "TesseraFlow API - Lead aggregation and outreach management",
+  "description": "Helix API - MSP lead aggregation and outreach management",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

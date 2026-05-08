@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-TesseraFlow Google Maps Scraper
+Helix Google Maps Scraper
 Scrapes business data from Google Maps for lead generation.
 
 Usage:
@@ -191,7 +191,7 @@ def scrape_google_maps(category, geography, radius=10):
     return results
 
 def post_to_api(leads, api_url="http://localhost:3001/api/leads"):
-    """Post scraped leads to the TesseraFlow API"""
+    """Post scraped leads to the Helix API"""
     imported = 0
     skipped = 0
 
@@ -237,7 +237,7 @@ def save_to_csv(leads, output_path="scraped_leads.csv"):
     print(f"Saved {len(leads)} leads to {output_path}", file=sys.stderr)
 
 def main():
-    parser = argparse.ArgumentParser(description='TesseraFlow Google Maps Scraper')
+    parser = argparse.ArgumentParser(description='Helix Google Maps Scraper')
     parser.add_argument('--category', default='restaurants', help='Business category to search')
     parser.add_argument('--geography', default='Long Island, NY', help='Geographic area to search')
     parser.add_argument('--radius', type=int, default=10, help='Search radius in miles')

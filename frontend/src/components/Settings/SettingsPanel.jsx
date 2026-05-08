@@ -192,7 +192,7 @@ export default function SettingsPanel() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)' }}>
                       <div style={{
                         width: '28px', height: '28px', borderRadius: '50%',
-                        background: u.avatar_color || '#6366f1',
+                        background: u.avatar_color || 'var(--accent-hover)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: '10px', fontWeight: 700, color: '#fff', flexShrink: 0,
                       }}>
@@ -256,7 +256,7 @@ export default function SettingsPanel() {
                             width: '24px',
                             height: '24px',
                             borderRadius: '50%',
-                            background: u.avatar_color || '#6366f1',
+                            background: u.avatar_color || 'var(--accent-hover)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -755,7 +755,7 @@ export default function SettingsPanel() {
                 {googleSyncing ? 'Syncing...' : 'Sync All Events to Google'}
               </button>
               <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
-                Push all unsynced TesseraFlow events to Google Calendar
+                Push all unsynced Helix events to Google Calendar
               </span>
             </div>
           </Field>

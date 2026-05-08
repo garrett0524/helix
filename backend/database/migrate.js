@@ -1,5 +1,5 @@
 /**
- * TesseraFlow SQLite -> PostgreSQL Migration Script
+ * Helix SQLite -> PostgreSQL Migration Script
  *
  * Reads the existing SQLite database and copies all data to PostgreSQL.
  * Run once: node backend/database/migrate.js

@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "Deploying TesseraFlow..."
+echo "Deploying Helix..."
 
 # Pull latest code
 git pull origin main
@@ -13,6 +13,6 @@ cd ..
 node backend/database/seed.js
 
 # Restart app
-pm2 restart tesseraflow || pm2 start ecosystem.config.js
+pm2 restart helix || pm2 start ecosystem.config.js
 
 echo "Deployment complete!"
