@@ -18,13 +18,16 @@ const useIsMobile = () => {
 };
 
 const SCORING_RULES = [
-  { factor: 'Category Match', points: '0-20', logic: 'Bars/Restaurants = 20, Gyms = 20, Other = 10' },
-  { factor: 'Google Rating', points: '0-15', logic: '4.5+ = 15, 4.0-4.4 = 10, 3.5-3.9 = 5, below = 0' },
-  { factor: 'Review Count', points: '0-15', logic: '100+ = 15, 50-99 = 10, 20-49 = 5, below = 0' },
-  { factor: 'Has Phone Number', points: '0-10', logic: 'Yes = 10, No = 0' },
-  { factor: 'Has Website', points: '0-10', logic: 'Yes = 10, No = 0' },
-  { factor: 'Owner Name Found', points: '0-10', logic: 'Yes = 10, No = 0' },
-  { factor: 'Engagement', points: '0-20', logic: 'Disabled -- will activate when outreach features are enabled', disabled: true },
+  { phase: 'Auto', factor: 'Verified Email', points: '10', logic: 'Lead has a non-empty email address' },
+  { phase: 'Auto', factor: 'Has Website', points: '5', logic: 'Lead has a website URL on file' },
+  { phase: 'Auto', factor: 'Company Size 51+', points: '10', logic: 'company_size is 51-200 or 200+' },
+  { phase: 'Auto', factor: 'MSP or ISP Category', points: '10', logic: 'category is MSP or ISP' },
+  { phase: 'Auto', factor: 'Has Responded', points: '15', logic: 'email_status = replied or pipeline past responded' },
+  { phase: 'Discovery', factor: '50+ Managed Locations', points: '15', logic: 'estimated_locations >= 50' },
+  { phase: 'Discovery', factor: 'Compatible Hardware', points: '10', logic: 'compatible_hardware confirmed in lead modal' },
+  { phase: 'Discovery', factor: 'Manages Wi-Fi', points: '10', logic: 'manages_wifi toggled on' },
+  { phase: 'Discovery', factor: 'Decision Maker Engaged', points: '10', logic: 'decision_maker_engaged toggled on' },
+  { phase: 'Discovery', factor: 'Near-Term Timeline', points: '5', logic: 'deployment_timeline is Immediate or 30 days' },
 ];
 
 export default function SettingsPanel() {
@@ -540,6 +543,7 @@ export default function SettingsPanel() {
         <table className="data-table" style={{ marginBottom: 'var(--space-md)' }}>
           <thead>
             <tr>
+              <th>Phase</th>
               <th>Factor</th>
               <th>Points</th>
               <th>Logic</th>
@@ -547,17 +551,18 @@ export default function SettingsPanel() {
           </thead>
           <tbody>
             {SCORING_RULES.map((rule, i) => (
-              <tr key={i} style={rule.disabled ? { opacity: 0.4 } : {}}>
+              <tr key={i}>
+                <td style={{ fontWeight: 500, color: rule.phase === 'Discovery' ? 'var(--accent-secondary)' : 'var(--accent-hover)' }}>{rule.phase}</td>
                 <td style={{ fontWeight: 500 }}>{rule.factor}</td>
                 <td style={{ fontFamily: 'monospace' }}>{rule.points}</td>
-                <td style={{ fontSize: '13px', color: rule.disabled ? 'var(--text-tertiary)' : 'var(--text-secondary)', fontStyle: rule.disabled ? 'italic' : 'normal' }}>{rule.logic}</td>
+                <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{rule.logic}</td>
               </tr>
             ))}
           </tbody>
         </table>
         </div>
         <p style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
-          Current max: 80 points (Engagement disabled). Scores auto-calculate when leads are created or updated.
+          Total max 100 points. Auto score (50) calculates on lead create/update. Discovery score (50) is set in the lead detail modal after a discovery call.
         </p>
       </Section>
 

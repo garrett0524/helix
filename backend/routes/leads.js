@@ -556,8 +556,6 @@ router.post('/score-all', requireAdmin, async (req, res) => {
  */
 async function autoCreateCalendarFromStageChange(leadId, lead, newStage, notes) {
   const businessName = lead.business_name || 'Unknown';
-  const category = (lead.category || '').toLowerCase();
-  const isGym = category.includes('gym') || category.includes('fitness') || category.includes('crossfit') || category.includes('yoga');
   const now = new Date();
 
   if (newStage === 'discovery_call') {
@@ -566,7 +564,7 @@ async function autoCreateCalendarFromStageChange(leadId, lead, newStage, notes) 
 
     await query(
       `INSERT INTO calendar_events (lead_id, event_type, title, description, event_date, event_time, duration_minutes, auto_created)
-       VALUES ($1, 'site_visit', $2, $3, $4, '10:00', 30, true)`,
+       VALUES ($1, 'site_visit', $2, $3, $4, '14:00', 30, true)`,
       [
         leadId,
         `Discovery Call: ${businessName}`,
@@ -582,17 +580,15 @@ async function autoCreateCalendarFromStageChange(leadId, lead, newStage, notes) 
     if (notesLower.includes('call back') || notesLower.includes('callback')) {
       const nextBiz = getNextBusinessDay(now);
       const eventDate = formatDate(nextBiz);
-      const eventTime = isGym ? '10:00' : '14:00';
 
       await query(
         `INSERT INTO calendar_events (lead_id, event_type, title, description, event_date, event_time, duration_minutes, auto_created)
-         VALUES ($1, 'callback', $2, $3, $4, $5, 15, true)`,
+         VALUES ($1, 'callback', $2, $3, $4, '14:00', 15, true)`,
         [
           leadId,
           `Callback: ${businessName}`,
           'Auto-created when lead moved to Outreach Sent stage with callback mention in notes.',
           eventDate,
-          eventTime,
         ]
       );
       console.log(`Calendar: Created callback event for ${businessName} on ${eventDate}`);

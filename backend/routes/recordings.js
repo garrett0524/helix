@@ -589,8 +589,6 @@ async function autoCreateCalendarEvent(analysis, recordingId, leadId) {
 
   const { rows: [lead] } = await query('SELECT * FROM leads WHERE id = $1', [leadId]);
   const businessName = lead ? lead.business_name : 'Unknown';
-  const category = lead ? (lead.category || '').toLowerCase() : '';
-  const isGym = category.includes('gym') || category.includes('fitness') || category.includes('crossfit') || category.includes('yoga');
   const now = new Date();
 
   if (outcome === 'callback') {
@@ -603,7 +601,7 @@ async function autoCreateCalendarEvent(analysis, recordingId, leadId) {
     } else {
       const nextBiz = getNextBusinessDay(now);
       eventDate = formatDate(nextBiz);
-      eventTime = isGym ? '10:00' : '14:00';
+      eventTime = '14:00';
     }
 
     await query(
@@ -644,7 +642,7 @@ async function autoCreateCalendarEvent(analysis, recordingId, leadId) {
     if (followUpDate.getDay() === 6) followUpDate.setDate(followUpDate.getDate() + 2);
 
     const eventDate = formatDate(followUpDate);
-    const eventTime = isGym ? '10:00' : '14:00';
+    const eventTime = '14:00';
 
     await query(
       `INSERT INTO calendar_events (lead_id, recording_id, event_type, title, description, event_date, event_time, duration_minutes, auto_created)
