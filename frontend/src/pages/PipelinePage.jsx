@@ -12,6 +12,7 @@ import {
   getEnrichBulkStatus,
   getApolloSequences,
   pushToApolloSequence,
+  importLeads,
 } from '../api'
 
 export default function PipelinePage() {
@@ -38,6 +39,32 @@ export default function PipelinePage() {
 
   // Row-level selection (drives "Push to Sequence")
   const [selectedIds, setSelectedIds] = useState(new Set());
+
+  // CSV import
+  const fileInputRef = useRef(null);
+  const handleImportClick = () => {
+    if (fileInputRef.current) fileInputRef.current.click();
+  };
+  const handleImportFile = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    // Reset the input so selecting the same file again still triggers onChange.
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (!file) return;
+    setBulkProgress({ title: 'Importing CSV', message: `Uploading ${file.name}...`, done: false });
+    try {
+      const result = await importLeads(file);
+      setBulkProgress(null);
+      // New response shape: { inserted, updated, skipped, total }.
+      // Fall back to legacy `imported` key just in case the backend ever returns it.
+      const ins = result.inserted ?? result.imported ?? 0;
+      const upd = result.updated ?? 0;
+      const skp = result.skipped ?? 0;
+      setToast({ message: `Import: ${ins} inserted, ${upd} updated, ${skp} skipped` });
+      fetchLeads();
+    } catch (err) {
+      setBulkProgress({ title: 'Import Failed', message: err.message || 'Unknown error', done: true });
+    }
+  };
 
   // Close dropdown menus on outside click
   useEffect(() => {
@@ -314,6 +341,23 @@ export default function PipelinePage() {
               </div>
             )}
           </div>
+
+          {/* CSV Import */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            onChange={handleImportFile}
+            style={{ display: 'none' }}
+          />
+          <button
+            className="btn btn-secondary"
+            onClick={handleImportClick}
+            style={{ fontSize: '13px', flexShrink: 0 }}
+            title="Import MSP leads from CSV"
+          >
+            Import CSV
+          </button>
 
           <button
             className="btn btn-primary"

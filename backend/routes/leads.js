@@ -273,113 +273,188 @@ router.delete('/:id', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * Resolve MSP CSV columns from a normalized header row (lowercase, alphanumeric+underscore only).
+ * Matches the spec aliases case-insensitively. Returns a lead object with
+ * null for missing fields. Returns null if business_name cannot be resolved.
+ */
+function resolveMspRow(row) {
+  // Helper that picks the first non-empty value across alias keys.
+  const pick = (...keys) => {
+    for (const k of keys) {
+      const v = row[k];
+      if (v !== undefined && v !== null && String(v).trim() !== '') {
+        return String(v).trim();
+      }
+    }
+    return null;
+  };
+
+  const business_name = pick('company_name', 'business_name', 'name', 'businessname', 'company');
+  if (!business_name) return null;
+
+  // Contact name: prefer contact_name, else concat first_name + last_name.
+  let contact_name = pick('contact_name');
+  if (!contact_name) {
+    const first = pick('first_name', 'firstname');
+    const last = pick('last_name', 'lastname');
+    if (first || last) contact_name = `${first || ''} ${last || ''}`.trim();
+  }
+
+  // Category normalization to canonical MSP set.
+  const category = normalizeCategory(pick('category', 'type'));
+
+  // estimated_locations / company_size are typed columns.
+  const estLocRaw = pick('estimated_locations');
+  const estimated_locations = estLocRaw !== null
+    ? (Number.isFinite(parseInt(estLocRaw, 10)) ? parseInt(estLocRaw, 10) : null)
+    : null;
+
+  return {
+    business_name,
+    category,
+    website: pick('website', 'url', 'company_website'),
+    city: pick('city', 'town'),
+    state: pick('state', 'state_code'),
+    phone: pick('phone', 'phone_number', 'corporate_phone'),
+    email: pick('email', 'email_address'),
+    contact_name,
+    contact_title: pick('contact_title', 'title'),
+    company_size: pick('company_size', 'employees'),
+    estimated_locations,
+  };
+}
+
+/**
+ * Normalize a free-form category string into one of the canonical MSP buckets:
+ * ISP | MSP | IT Services | WISP | Enterprise IT. Returns the original string
+ * (trimmed) if no match — preserves data we don't recognize rather than dropping it.
+ */
+function normalizeCategory(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  const lower = s.toLowerCase();
+
+  if (lower === 'wisp' || lower.includes('wireless isp') || lower.includes('wireless internet')) return 'WISP';
+  if (lower === 'isp' || lower.includes('internet service provider') || lower.includes('internet provider')) return 'ISP';
+  if (lower === 'msp' || lower.includes('managed service') || lower.includes('managed services provider')) return 'MSP';
+  if (lower.includes('enterprise it') || lower.includes('enterprise i.t')) return 'Enterprise IT';
+  if (lower.includes('it service') || lower.includes('it support') || lower.includes('it consult') || lower === 'it') return 'IT Services';
+  return s;
+}
+
 // POST /api/leads/import - Bulk CSV import (admin only)
+// MSP CSV format with header alias resolution + merge-by-(business_name, city).
 router.post('/import', requireAdmin, upload.single('file'), async (req, res) => {
+  let tempPath = null;
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No CSV file provided' });
     }
+    tempPath = req.file.path;
 
-    const csvContent = fs.readFileSync(req.file.path, 'utf-8');
+    const csvContent = fs.readFileSync(tempPath, 'utf-8');
     const records = parseCSV(csvContent);
 
     if (records.length === 0) {
-      fs.unlinkSync(req.file.path);
+      fs.unlinkSync(tempPath);
+      tempPath = null;
       return res.status(400).json({ error: 'CSV file is empty or has no data rows' });
     }
 
-    let imported = 0;
+    let inserted = 0;
     let updated = 0;
     let skipped = 0;
-    let errors = [];
+    const affectedIds = [];
+    const errors = [];
 
     for (let i = 0; i < records.length; i++) {
       try {
-        const row = records[i];
-
-        // Support both Helix and Apollo CSV column names
-        const lead = {
-          business_name: row.business_name || row.name || row.businessname || row.name_for_emails || row.company || row.company_name || null,
-          category: row.category || row.type || row.subtypes || null,
-          address: row.address || row.full_address || row.street || null,
-          city: row.city || row.town || null,
-          state: row.state || row.state_code || 'NY',
-          zip: row.zip || row.zipcode || row.postal || row.postal_code || null,
-          phone: row.phone || row.phone_number || row.corporate_phone || null,
-          website: row.website || row.url || row.company_website || null,
-          google_rating: parseFloat(row.google_rating || row.rating) || null,
-          review_count: parseInt(row.review_count || row.reviews, 10) || 0,
-          place_id: row.place_id || row.placeid || null,
-          owner_name: row.owner_name || row.owner || row.contact || row.owner_title || null,
-          // Apollo-specific fields
-          email: row.email || row.email_address || null,
-          contact_name: row.contact_name || (row.first_name && row.last_name ? `${row.first_name} ${row.last_name}`.trim() : null) || row.name || null,
-          contact_title: row.contact_title || row.title || null,
-          direct_phone: row.direct_phone || row.mobile_phone || row.personal_phone || null,
-        };
-
-        if (!lead.business_name) {
+        const lead = resolveMspRow(records[i]);
+        if (!lead || !lead.business_name) {
           skipped++;
           continue;
         }
 
-        if (lead.state && lead.state.length > 2) {
-          if (row.state_code && row.state_code.length === 2) {
-            lead.state = row.state_code;
-          }
-        }
-
-        // Check for existing lead by place_id OR by business_name + city (for Apollo merge)
+        // Merge lookup: business_name + city, case-insensitive.
         let existingId = null;
-        if (lead.place_id) {
-          const { rows: [existing] } = await query('SELECT id FROM leads WHERE place_id = $1', [lead.place_id]);
-          if (existing) existingId = existing.id;
-        }
-        if (!existingId && lead.business_name && lead.city) {
+        if (lead.city) {
           const { rows: [existing] } = await query(
             'SELECT id FROM leads WHERE LOWER(business_name) = LOWER($1) AND LOWER(city) = LOWER($2) LIMIT 1',
             [lead.business_name, lead.city]
           );
           if (existing) existingId = existing.id;
+        } else {
+          // No city in row: only merge if there's exactly one existing lead by name (and no city set on it).
+          const { rows: [existing] } = await query(
+            "SELECT id FROM leads WHERE LOWER(business_name) = LOWER($1) AND (city IS NULL OR city = '') LIMIT 1",
+            [lead.business_name]
+          );
+          if (existing) existingId = existing.id;
         }
 
         if (existingId) {
-          // Update existing lead with new email/contact info (merge)
+          // UPDATE: only set fields that are non-null in the CSV row (preserve existing values).
           const updateFields = [];
           const updateParams = [];
           let pIdx = 1;
-          if (lead.email) { updateFields.push(`email = $${pIdx++}`); updateParams.push(lead.email); }
-          if (lead.contact_name) { updateFields.push(`contact_name = $${pIdx++}`); updateParams.push(lead.contact_name); }
-          if (lead.contact_title) { updateFields.push(`contact_title = $${pIdx++}`); updateParams.push(lead.contact_title); }
-          if (lead.direct_phone) { updateFields.push(`direct_phone = $${pIdx++}`); updateParams.push(lead.direct_phone); }
-          if (lead.phone && !lead.direct_phone) { updateFields.push(`phone = $${pIdx++}`); updateParams.push(lead.phone); }
-          if (updateFields.length > 0) {
-            updateFields.push('updated_at = NOW()');
-            updateParams.push(existingId);
-            await query(`UPDATE leads SET ${updateFields.join(', ')} WHERE id = $${pIdx}`, updateParams);
-            updated++;
-          } else {
-            skipped++;
+          const setIfPresent = (col, val) => {
+            if (val === null || val === undefined || val === '') return;
+            updateFields.push(`${col} = $${pIdx++}`);
+            updateParams.push(val);
+          };
+          setIfPresent('category', lead.category);
+          setIfPresent('website', lead.website);
+          setIfPresent('city', lead.city);
+          setIfPresent('state', lead.state);
+          setIfPresent('phone', lead.phone);
+          setIfPresent('email', lead.email);
+          setIfPresent('contact_name', lead.contact_name);
+          setIfPresent('contact_title', lead.contact_title);
+          setIfPresent('company_size', lead.company_size);
+          if (lead.estimated_locations !== null && lead.estimated_locations !== undefined) {
+            updateFields.push(`estimated_locations = $${pIdx++}`);
+            updateParams.push(lead.estimated_locations);
           }
-          continue;
+
+          if (updateFields.length === 0) {
+            skipped++;
+            continue;
+          }
+          updateFields.push('updated_at = NOW()');
+          updateParams.push(existingId);
+          await query(
+            `UPDATE leads SET ${updateFields.join(', ')} WHERE id = $${pIdx}`,
+            updateParams
+          );
+          updated++;
+          affectedIds.push(existingId);
+        } else {
+          // INSERT
+          const { rows: [newRow] } = await query(
+            `INSERT INTO leads (
+               business_name, category, website, city, state, phone, email,
+               contact_name, contact_title, company_size, estimated_locations
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+             RETURNING id`,
+            [
+              lead.business_name,
+              lead.category,
+              lead.website,
+              lead.city,
+              lead.state,
+              lead.phone,
+              lead.email,
+              lead.contact_name,
+              lead.contact_title,
+              lead.company_size,
+              lead.estimated_locations,
+            ]
+          );
+          inserted++;
+          if (newRow) affectedIds.push(newRow.id);
         }
-
-        const { rows: [inserted] } = await query(
-          `INSERT INTO leads (business_name, category, address, city, state, zip,
-            phone, website, google_rating, review_count, place_id, owner_name,
-            email, contact_name, contact_title, direct_phone)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-           RETURNING id`,
-          [
-            lead.business_name, lead.category, lead.address, lead.city,
-            lead.state, lead.zip, lead.phone, lead.website,
-            lead.google_rating, lead.review_count, lead.place_id, lead.owner_name,
-            lead.email, lead.contact_name, lead.contact_title, lead.direct_phone
-          ]
-        );
-
-        if (inserted) await scoreLead(inserted.id);
-        imported++;
       } catch (rowErr) {
         if (rowErr.message && rowErr.message.includes('unique')) {
           skipped++;
@@ -389,17 +464,32 @@ router.post('/import', requireAdmin, upload.single('file'), async (req, res) => 
       }
     }
 
-    fs.unlinkSync(req.file.path);
+    // Score every affected lead (best-effort; one failure shouldn't abort the response).
+    for (const id of affectedIds) {
+      try {
+        await scoreLead(id);
+      } catch (scoreErr) {
+        console.error(`scoreLead(${id}) failed during CSV import:`, scoreErr.message);
+      }
+    }
 
+    fs.unlinkSync(tempPath);
+    tempPath = null;
+
+    const total = records.length;
     res.json({
-      message: 'Import complete',
-      imported,
+      inserted,
       updated,
       skipped,
+      total,
+      // Diagnostic extras (not part of the spec contract but useful for ops).
       errors: errors.length,
-      errorDetails: errors.slice(0, 10)
+      errorDetails: errors.slice(0, 10),
     });
   } catch (err) {
+    if (tempPath) {
+      try { fs.unlinkSync(tempPath); } catch (_) { /* ignore */ }
+    }
     res.status(500).json({ error: 'Import failed', message: err.message });
   }
 });
