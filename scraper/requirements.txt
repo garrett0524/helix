@@ -1,0 +1,6 @@
+# TesseraFlow Scraper Dependencies
+# For MVP, only stdlib is used. Add these for production scraping:
+# playwright
+# beautifulsoup4
+# requests
+# lxml

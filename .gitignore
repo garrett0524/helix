@@ -1,0 +1,13 @@
+node_modules/
+.env
+.env.*
+data/
+backend/data/
+backend/recordings/
+recordings/
+dist/
+build/
+*.log
+.DS_Store
+.vscode/
+.idea/

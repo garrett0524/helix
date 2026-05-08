@@ -1,0 +1,31 @@
+{
+  "default_geography": "Long Island, NY",
+  "default_radius_miles": 10,
+  "categories": [
+    "bars",
+    "restaurants",
+    "pubs",
+    "taverns",
+    "sports bars",
+    "gyms",
+    "fitness centers",
+    "CrossFit",
+    "yoga studios",
+    "martial arts"
+  ],
+  "rate_limit_seconds": 2,
+  "max_results_per_query": 100,
+  "api_url": "http://localhost:3001/api/leads",
+  "proxy": null,
+  "nassau_towns": [
+    "Hempstead", "North Hempstead", "Oyster Bay", "Glen Cove",
+    "Long Beach", "Garden City", "Mineola", "Hicksville",
+    "Levittown", "Freeport", "Valley Stream", "Massapequa"
+  ],
+  "suffolk_towns": [
+    "Babylon", "Brookhaven", "East Hampton", "Huntington",
+    "Islip", "Riverhead", "Smithtown", "Southampton",
+    "Southold", "Shelter Island", "Patchogue", "Bay Shore",
+    "Commack", "Deer Park", "Lindenhurst"
+  ]
+}

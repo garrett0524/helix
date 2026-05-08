@@ -1,0 +1,90 @@
+/* ── Lead Table — Dark Command Center ── */
+
+.lead-table-container {
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+.lead-table-filters {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  border-bottom: 1px solid var(--border-default);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.lead-search {
+  min-width: 200px;
+  flex: 1;
+}
+
+.lead-table-filters select,
+.lead-table-filters input[type="number"] {
+  width: auto;
+  min-width: 130px;
+}
+
+.lead-table-scroll {
+  overflow-x: auto;
+}
+
+.sort-icon {
+  margin-left: 4px;
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+.lead-table-footer {
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--border-default);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ── Mobile: Lead Table ── */
+@media (max-width: 768px) {
+  .lead-table-filters {
+    flex-direction: column;
+    gap: var(--space-sm);
+    padding: var(--space-md);
+  }
+
+  .lead-search {
+    min-width: 100%;
+    width: 100%;
+  }
+
+  .lead-table-filters select,
+  .lead-table-filters input[type="number"] {
+    width: 100%;
+    min-width: 100%;
+    min-height: 44px;
+  }
+
+  .lead-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .lead-table-footer {
+    padding: var(--space-sm) var(--space-md);
+  }
+}
+
+@media (max-width: 480px) {
+  .lead-table-container {
+    border-radius: var(--radius-md);
+  }
+
+  .lead-table-filters {
+    padding: var(--space-sm);
+  }
+}
