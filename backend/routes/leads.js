@@ -169,17 +169,30 @@ router.put('/:id', async (req, res) => {
       'owner_name', 'pipeline_stage', 'lead_score', 'contact_attempts',
       'last_contact_date', 'last_contact_method', 'notes',
       'email', 'contact_name', 'contact_title', 'direct_phone', 'apollo_id',
-      'enriched_at', 'email_status', 'instantly_campaign_id', 'last_email_at'
+      'enriched_at', 'email_status', 'instantly_campaign_id', 'last_email_at',
+      // Phase 6: MSP profile + Post-Discovery fields
+      'estimated_locations', 'hardware_vendors', 'manages_wifi',
+      'geographic_reach', 'company_size', 'discovery_score',
+      'compatible_hardware', 'deployment_timeline', 'apollo_sequence_id',
+      'auto_score', 'decision_maker_engaged'
     ];
+
+    // Fields that, when changed, require re-scoring the lead.
+    const SCORING_FIELDS = new Set([
+      'email', 'website', 'company_size', 'category', 'email_status',
+      'pipeline_stage', 'discovery_score'
+    ]);
 
     const updates = [];
     const params = [];
     let paramIdx = 1;
+    let scoringFieldChanged = false;
 
     for (const field of fields) {
       if (req.body[field] !== undefined) {
         updates.push(`${field} = $${paramIdx++}`);
         params.push(req.body[field]);
+        if (SCORING_FIELDS.has(field)) scoringFieldChanged = true;
       }
     }
 
@@ -200,6 +213,17 @@ router.put('/:id', async (req, res) => {
         await autoCreateCalendarFromStageChange(Number(req.params.id), lead, newStage, req.body.notes || lead.notes);
       } catch (calErr) {
         console.error('Calendar auto-creation from stage change failed:', calErr.message);
+      }
+    }
+
+    // Re-score the lead if any scoring-relevant field changed.
+    // The client may explicitly send lead_score (e.g. on a manual override),
+    // so only auto-rescore if lead_score was NOT in the request body.
+    if (scoringFieldChanged && req.body.lead_score === undefined) {
+      try {
+        await scoreLead(Number(req.params.id));
+      } catch (scoreErr) {
+        console.error('scoreLead after PUT failed:', scoreErr.message);
       }
     }
 
@@ -399,6 +423,17 @@ router.post('/rescore', requireAdmin, async (req, res) => {
     res.json({ message: `Re-scored ${result.updated} leads`, ...result });
   } catch (err) {
     res.status(500).json({ error: 'Re-scoring failed', message: err.message });
+  }
+});
+
+// POST /api/leads/score-all - Trigger two-phase rescoring for every lead.
+// Alias of /rescore aligned with the Phase 6 spec naming.
+router.post('/score-all', requireAdmin, async (req, res) => {
+  try {
+    const result = await scoreAllLeads();
+    res.json({ message: `Scored ${result.updated} leads`, ...result });
+  } catch (err) {
+    res.status(500).json({ error: 'Scoring failed', message: err.message });
   }
 });
 

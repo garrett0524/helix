@@ -215,6 +215,7 @@ export const syncAllToGoogle = () => fetchApi('/calendar/google/sync-all', { met
 
 // Rescore
 export const rescoreAllLeads = () => fetchApi('/leads/rescore', { method: 'POST' });
+export const scoreAllLeads = () => fetchApi('/leads/score-all', { method: 'POST' });
 
 // ============================================================
 // Apollo Enrichment
