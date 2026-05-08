@@ -1,5 +1,11 @@
-import { useState, useEffect } from 'react'
-import { getLeadRecordings, createCalendarEvent, enrichLead, getInstantlyCampaigns, pushToInstantly } from '../../api'
+import { useState, useEffect, useMemo } from 'react'
+import {
+  getLeadRecordings,
+  createCalendarEvent,
+  enrichLead,
+  getApolloSequences,
+  pushToApolloSequence,
+} from '../../api'
 import RecordingWidget from '../Recording/RecordingWidget'
 import CallAnalysis from '../Recording/CallAnalysis'
 
@@ -13,12 +19,16 @@ const useIsMobile = () => {
   return isMobile;
 };
 
+// Phase 4 pipeline stages (matches schema CHECK constraint).
 const STAGES = [
   { key: 'new', label: 'New' },
-  { key: 'contacted', label: 'Contacted' },
-  { key: 'interested', label: 'Interested' },
-  { key: 'meeting_booked', label: 'Meeting Booked' },
-  { key: 'closed', label: 'Closed' },
+  { key: 'outreach_sent', label: 'Outreach Sent' },
+  { key: 'responded', label: 'Responded' },
+  { key: 'discovery_call', label: 'Discovery Call' },
+  { key: 'technical_review', label: 'Technical Review' },
+  { key: 'contract_sent', label: 'Contract Sent' },
+  { key: 'onboarding', label: 'Onboarding' },
+  { key: 'live', label: 'Live' },
   { key: 'dead', label: 'Dead' },
 ];
 
@@ -35,13 +45,25 @@ const EVENT_TYPES = [
   { key: 'custom', label: 'Custom' },
 ];
 
-const EMAIL_STATUS_COLORS = {
-  none: { bg: 'rgba(107,114,128,0.15)', color: '#9ca3af' },
-  sent: { bg: 'rgba(59,130,246,0.15)', color: '#3b82f6' },
-  opened: { bg: 'rgba(234,179,8,0.15)', color: '#eab308' },
-  replied: { bg: 'rgba(16,185,129,0.15)', color: '#10b981' },
-  bounced: { bg: 'rgba(239,68,68,0.15)', color: '#ef4444' },
-};
+// Restricted to MSP-flavored categories per Phase 6 spec.
+const CATEGORY_OPTIONS = ['ISP', 'MSP', 'IT Services', 'WISP', 'Enterprise IT'];
+
+const GEO_REACH_OPTIONS = ['Local', 'Regional', 'Multi-State', 'National'];
+const COMPANY_SIZE_OPTIONS = ['1-10', '11-50', '51-200', '200+'];
+const DEPLOYMENT_TIMELINE_OPTIONS = ['Immediate', '30 days', '60 days', '90+', 'TBD'];
+
+// Phase 1 (auto) scoring contributing fields require us to recompute the
+// discovery score whenever any of these change. They map directly to the
+// Phase 2 rules in the spec.
+function computeDiscoveryScore(fields) {
+  let score = 0;
+  if (Number(fields.estimated_locations) >= 50) score += 15;
+  if (fields.compatible_hardware === true) score += 10;
+  if (fields.manages_wifi === true) score += 10;
+  if (fields.decision_maker_engaged === true) score += 10;
+  if (fields.deployment_timeline === 'Immediate' || fields.deployment_timeline === '30 days') score += 5;
+  return Math.min(50, score);
+}
 
 export default function LeadDetailModal({ lead: initialLead, onClose, onSave }) {
   const isMobile = useIsMobile();
@@ -70,23 +92,64 @@ export default function LeadDetailModal({ lead: initialLead, onClose, onSave }) 
   const [contactTitle, setContactTitle] = useState(lead.contact_title || '');
   const [directPhone, setDirectPhone] = useState(lead.direct_phone || '');
 
+  // MSP Profile fields (TASK-19)
+  const [estimatedLocations, setEstimatedLocations] = useState(
+    lead.estimated_locations != null ? String(lead.estimated_locations) : ''
+  );
+  const [hardwareVendors, setHardwareVendors] = useState(lead.hardware_vendors || '');
+  const [managesWifi, setManagesWifi] = useState(Boolean(lead.manages_wifi));
+  const [geographicReach, setGeographicReach] = useState(lead.geographic_reach || '');
+  const [companySize, setCompanySize] = useState(lead.company_size || '');
+
+  // Post-Discovery fields (TASK-20)
+  const [compatibleHardware, setCompatibleHardware] = useState(Boolean(lead.compatible_hardware));
+  const [deploymentTimeline, setDeploymentTimeline] = useState(lead.deployment_timeline || '');
+  const [decisionMakerEngaged, setDecisionMakerEngaged] = useState(Boolean(lead.decision_maker_engaged));
+  const [discoveryScore, setDiscoveryScore] = useState(
+    lead.discovery_score != null ? Number(lead.discovery_score) : 0
+  );
+  // Once the user manually edits discovery_score, stop auto-overwriting until
+  // another contributing field changes (then we resume auto-calc).
+  const [discoveryManual, setDiscoveryManual] = useState(false);
+
   // Apollo enrichment state
   const [enriching, setEnriching] = useState(false);
   const [enrichMsg, setEnrichMsg] = useState(null);
 
-  // Campaign push state
-  const [showCampaignPush, setShowCampaignPush] = useState(false);
-  const [campaigns, setCampaigns] = useState([]);
-  const [selectedCampaign, setSelectedCampaign] = useState('');
+  // Apollo sequence push state (TASK-22, replaces legacy Instantly flow)
+  const [showSequencePush, setShowSequencePush] = useState(false);
+  const [sequences, setSequences] = useState([]);
+  const [selectedSequence, setSelectedSequence] = useState('');
   const [pushing, setPushing] = useState(false);
   const [pushMsg, setPushMsg] = useState(null);
-  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
+  const [loadingSequences, setLoadingSequences] = useState(false);
 
   // Schedule form state
   const [showSchedule, setShowSchedule] = useState(false);
   const [scheduleForm, setScheduleForm] = useState(getDefaultScheduleForm());
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [scheduleMsg, setScheduleMsg] = useState(null);
+
+  // Auto-recompute discovery_score whenever a contributing field changes,
+  // unless the user has typed a manual override into the input.
+  useEffect(() => {
+    if (discoveryManual) return;
+    const next = computeDiscoveryScore({
+      estimated_locations: Number(estimatedLocations) || 0,
+      compatible_hardware: compatibleHardware,
+      manages_wifi: managesWifi,
+      decision_maker_engaged: decisionMakerEngaged,
+      deployment_timeline: deploymentTimeline,
+    });
+    setDiscoveryScore(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estimatedLocations, compatibleHardware, managesWifi, decisionMakerEngaged, deploymentTimeline]);
+
+  // Header rollup: auto_score (server-computed) + discovery_score (live), capped at 100.
+  const totalLeadScore = useMemo(() => {
+    const auto = Number(lead.auto_score || 0);
+    return Math.min(100, auto + Number(discoveryScore || 0));
+  }, [lead.auto_score, discoveryScore]);
 
   const handleEnrich = async () => {
     setEnriching(true);
@@ -111,41 +174,68 @@ export default function LeadDetailModal({ lead: initialLead, onClose, onSave }) 
     }
   };
 
-  const handleOpenCampaignPush = async () => {
-    setShowCampaignPush(true);
+  const buildSavePayload = () => ({
+    business_name: businessName,
+    category,
+    address,
+    city,
+    state,
+    zip,
+    phone,
+    website,
+    owner_name: ownerName,
+    pipeline_stage: stage,
+    notes,
+    email,
+    contact_name: contactName,
+    contact_title: contactTitle,
+    direct_phone: directPhone,
+    // MSP Profile
+    estimated_locations: estimatedLocations === '' ? null : Number(estimatedLocations),
+    hardware_vendors: hardwareVendors,
+    manages_wifi: managesWifi,
+    geographic_reach: geographicReach,
+    company_size: companySize,
+    // Post-Discovery
+    compatible_hardware: compatibleHardware,
+    deployment_timeline: deploymentTimeline,
+    decision_maker_engaged: decisionMakerEngaged,
+    discovery_score: Number(discoveryScore) || 0,
+  });
+
+  const handleOpenSequencePush = async () => {
+    setShowSequencePush(true);
     setPushMsg(null);
-    setLoadingCampaigns(true);
+    setLoadingSequences(true);
     try {
-      const res = await getInstantlyCampaigns();
-      setCampaigns(res.data || []);
+      const res = await getApolloSequences();
+      setSequences(res.data || []);
     } catch (err) {
-      setPushMsg({ type: 'error', text: 'Failed to load campaigns: ' + err.message });
+      setPushMsg({ type: 'error', text: 'Failed to load sequences: ' + err.message });
     } finally {
-      setLoadingCampaigns(false);
+      setLoadingSequences(false);
     }
   };
 
-  const handlePushToCampaign = async () => {
-    if (!selectedCampaign) return;
+  const handlePushToSequence = async () => {
+    if (!selectedSequence) return;
     setPushing(true);
     setPushMsg(null);
     try {
-      // Save any unsaved email/contact changes to DB first so the push reads fresh data
-      await onSave(lead.id, {
-        business_name: businessName, category, address, city, state, zip,
-        phone, website, owner_name: ownerName, pipeline_stage: stage, notes,
-        email, contact_name: contactName, contact_title: contactTitle, direct_phone: directPhone,
-      });
-      const res = await pushToInstantly([lead.id], selectedCampaign);
-      if (res.pushed > 0) {
-        setPushMsg({ type: 'success', text: 'Lead pushed to campaign!' });
-        setLead(prev => ({ ...prev, email_status: 'sent', instantly_campaign_id: selectedCampaign }));
-      } else if (res.skipped_no_email > 0) {
+      // Persist pending edits first so the push reads current data.
+      await onSave(lead.id, buildSavePayload());
+      const res = await pushToApolloSequence([lead.id], selectedSequence);
+      const pushedCount = res.pushed ?? res.added ?? 0;
+      const skippedNoEmail = res.skipped_no_email ?? 0;
+      if (pushedCount > 0) {
+        setPushMsg({ type: 'success', text: 'Lead pushed to sequence!' });
+        setLead(prev => ({ ...prev, email_status: 'sent', apollo_sequence_id: selectedSequence }));
+      } else if (skippedNoEmail > 0) {
         setPushMsg({ type: 'warning', text: 'Lead has no email. Enrich first.' });
       } else {
-        setPushMsg({ type: 'error', text: 'Push failed' });
+        setPushMsg({ type: 'error', text: res.error || 'Push failed' });
       }
-      setTimeout(() => setShowCampaignPush(false), 1500);
+      setTimeout(() => setShowSequencePush(false), 1500);
     } catch (err) {
       setPushMsg({ type: 'error', text: err.message || 'Push failed' });
     } finally {
@@ -171,6 +261,22 @@ export default function LeadDetailModal({ lead: initialLead, onClose, onSave }) 
     }
   }, [activeTab, lead.id]);
 
+  // Lazily fetch sequence list once so we can render the sequence name in the
+  // "In sequence: <name>" line when apollo_sequence_id is set.
+  useEffect(() => {
+    if (lead.apollo_sequence_id && sequences.length === 0 && !loadingSequences) {
+      (async () => {
+        try {
+          const res = await getApolloSequences();
+          setSequences(res.data || []);
+        } catch {
+          /* non-fatal — fall back to id */
+        }
+      })();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead.apollo_sequence_id]);
+
   const loadRecordings = async () => {
     setLoadingRecordings(true);
     try {
@@ -185,23 +291,7 @@ export default function LeadDetailModal({ lead: initialLead, onClose, onSave }) 
 
   const handleSave = async () => {
     setSaving(true);
-    await onSave(lead.id, {
-      business_name: businessName,
-      category,
-      address,
-      city,
-      state,
-      zip,
-      phone,
-      website,
-      owner_name: ownerName,
-      pipeline_stage: stage,
-      notes,
-      email,
-      contact_name: contactName,
-      contact_title: contactTitle,
-      direct_phone: directPhone,
-    });
+    await onSave(lead.id, buildSavePayload());
     setSaving(false);
   };
 
@@ -265,6 +355,28 @@ export default function LeadDetailModal({ lead: initialLead, onClose, onSave }) 
     display: 'block', color: 'var(--text-secondary)', fontSize: '11px',
     fontWeight: 600, marginBottom: '3px', textTransform: 'uppercase',
   };
+
+  const cardStyle = {
+    marginBottom: 'var(--space-xl)',
+    padding: 'var(--space-lg)',
+    background: 'var(--bg-tertiary)',
+    borderRadius: 'var(--radius-md)',
+    border: '1px solid var(--border-default)',
+  };
+
+  const cardHeaderStyle = {
+    fontSize: '13px',
+    fontWeight: 600,
+    color: 'var(--text-primary)',
+    marginBottom: 'var(--space-md)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+  };
+
+  const emailStatus = lead.email_status || 'none';
+  const sequenceName = lead.apollo_sequence_id
+    ? (sequences.find(s => String(s.id) === String(lead.apollo_sequence_id))?.name)
+    : null;
 
   // ── Schedule quick-add panel (shared across tabs) ──
   const schedulePanel = showSchedule && (
@@ -372,7 +484,7 @@ export default function LeadDetailModal({ lead: initialLead, onClose, onSave }) 
             <div style={{ flex: 1, minWidth: 0 }}>
               <h2 style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.business_name}</h2>
               <p style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
-                {lead.category || 'Uncategorized'}
+                {lead.category || 'Uncategorized'} | Score {totalLeadScore}
               </p>
             </div>
             <button
@@ -395,7 +507,27 @@ export default function LeadDetailModal({ lead: initialLead, onClose, onSave }) 
           /* Desktop header */
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-lg)' }}>
             <div>
-              <h2>{lead.business_name}</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
+                <h2>{lead.business_name}</h2>
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'baseline',
+                  gap: '4px',
+                  padding: '4px 12px',
+                  borderRadius: 'var(--radius-full)',
+                  background: 'var(--bg-tertiary)',
+                  border: '1px solid var(--border-default)',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: totalLeadScore >= 70 ? 'var(--color-success)' :
+                         totalLeadScore >= 40 ? 'var(--color-warning)' :
+                         'var(--text-secondary)',
+                }}>
+                  Score
+                  <span style={{ fontSize: '15px', fontWeight: 700 }}>{totalLeadScore}</span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 500 }}>/100</span>
+                </span>
+              </div>
               <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '4px' }}>
                 {lead.category || 'Uncategorized'} {lead.city && ` | ${lead.city}, ${lead.state || 'NY'}`}
               </p>
@@ -468,7 +600,10 @@ export default function LeadDetailModal({ lead: initialLead, onClose, onSave }) 
               </div>
               <div>
                 <label style={labelStyle}>Category</label>
-                <input type="text" value={category} onChange={e => setCategory(e.target.value)} placeholder="e.g. Restaurant, Bar, Gym" style={inputStyle} />
+                <select value={category} onChange={e => setCategory(e.target.value)} style={inputStyle}>
+                  <option value="">Select category...</option>
+                  {CATEGORY_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
               </div>
               <div>
                 <label style={labelStyle}>Owner / Manager</label>
@@ -502,52 +637,37 @@ export default function LeadDetailModal({ lead: initialLead, onClose, onSave }) 
               </div>
             </div>
 
-            {/* Read-only metrics */}
+            {/* Read-only metrics — google_rating, review_count, place_id intentionally hidden per Phase 6 spec */}
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 1fr 1fr 1fr', gap: 'var(--space-md)', marginBottom: 'var(--space-xl)' }}>
               <InfoField label="Lead Score" value={
                 <span style={{
                   fontWeight: 700, fontSize: '18px',
-                  color: lead.lead_score >= 70 ? 'var(--color-success)' :
-                         lead.lead_score >= 40 ? 'var(--color-warning)' : 'var(--text-secondary)'
+                  color: totalLeadScore >= 70 ? 'var(--color-success)' :
+                         totalLeadScore >= 40 ? 'var(--color-warning)' : 'var(--text-secondary)'
                 }}>
-                  {lead.lead_score || 0}
+                  {totalLeadScore}
                 </span>
               } />
-              <InfoField label="Google Rating" value={lead.google_rating ? `${lead.google_rating} stars` : '-'} />
-              <InfoField label="Attempts" value={lead.contact_attempts || 0} />
+              <InfoField label="Auto Score" value={lead.auto_score || 0} />
+              <InfoField label="Discovery Score" value={discoveryScore || 0} />
               <InfoField label="Added" value={lead.created_at ? lead.created_at.split('T')[0] : '-'} />
             </div>
 
             {/* Email & Contact Info */}
-            <div style={{
-              marginBottom: 'var(--space-xl)',
-              padding: 'var(--space-lg)',
-              background: 'var(--bg-tertiary)',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--border-default)',
-            }}>
+            <div style={cardStyle}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-md)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
                   <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>Email & Contact</span>
-                  {lead.email_status && lead.email_status !== 'none' && (
-                    <span style={{
-                      padding: '2px 8px',
-                      borderRadius: 'var(--radius-full)',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      background: EMAIL_STATUS_COLORS[lead.email_status]?.bg || EMAIL_STATUS_COLORS.none.bg,
-                      color: EMAIL_STATUS_COLORS[lead.email_status]?.color || EMAIL_STATUS_COLORS.none.color,
-                    }}>
-                      {lead.email_status}
-                    </span>
-                  )}
+                  <span className={`badge badge-email-${emailStatus}`} style={{ fontSize: '11px' }}>
+                    {emailStatus}
+                  </span>
                 </div>
                 <button
                   className="btn btn-sm"
                   onClick={handleEnrich}
                   disabled={enriching}
                   style={{
-                    background: 'linear-gradient(135deg, #8b5cf6, var(--accent-hover))',
+                    background: 'var(--gradient-primary)',
                     color: 'white',
                     border: 'none',
                     fontSize: '12px',
@@ -595,51 +715,66 @@ export default function LeadDetailModal({ lead: initialLead, onClose, onSave }) 
                 </div>
               )}
 
-              {/* Add to Campaign button */}
-              {email && !lead.instantly_campaign_id && !showCampaignPush && (
+              {/* Apollo Sequence push controls */}
+              {lead.apollo_sequence_id ? (
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: 'var(--space-md)' }}>
+                  In sequence: <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                    {sequenceName || lead.apollo_sequence_id}
+                  </span>
+                </div>
+              ) : email ? (
+                !showSequencePush && (
+                  <button
+                    className="btn btn-sm"
+                    onClick={handleOpenSequencePush}
+                    style={{
+                      marginTop: 'var(--space-md)',
+                      background: 'transparent',
+                      border: '1px solid var(--accent-primary)',
+                      color: 'var(--accent-primary)',
+                      fontSize: '12px',
+                      padding: '5px 12px',
+                    }}
+                  >
+                    Push to Sequence
+                  </button>
+                )
+              ) : (
                 <button
                   className="btn btn-sm"
-                  onClick={handleOpenCampaignPush}
+                  disabled
+                  title="No email on file"
                   style={{
                     marginTop: 'var(--space-md)',
                     background: 'transparent',
-                    border: '1px solid var(--accent-primary)',
-                    color: 'var(--accent-primary)',
+                    border: '1px solid var(--border-default)',
+                    color: 'var(--text-tertiary)',
                     fontSize: '12px',
                     padding: '5px 12px',
+                    cursor: 'not-allowed',
                   }}
                 >
-                  Add to Campaign
+                  Push to Sequence
                 </button>
               )}
-              {!email && !lead.email && !showCampaignPush && (
-                <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: 'var(--space-sm)' }}>
-                  Add an email to push to a campaign
-                </div>
-              )}
-              {lead.instantly_campaign_id && (
-                <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: 'var(--space-sm)' }}>
-                  In Instantly campaign
-                </div>
-              )}
 
-              {/* Campaign push inline */}
-              {showCampaignPush && (
+              {/* Sequence picker inline */}
+              {showSequencePush && (
                 <div style={{ marginTop: 'var(--space-md)', padding: 'var(--space-md)', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-default)' }}>
-                  {loadingCampaigns ? (
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Loading campaigns...</div>
+                  {loadingSequences ? (
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Loading sequences...</div>
                   ) : (
                     <>
-                      <label style={labelStyle}>Select Campaign</label>
-                      <select value={selectedCampaign} onChange={e => setSelectedCampaign(e.target.value)} style={{ ...inputStyle, marginBottom: 'var(--space-sm)' }}>
-                        <option value="">Select a campaign...</option>
-                        {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      <label style={labelStyle}>Select Sequence</label>
+                      <select value={selectedSequence} onChange={e => setSelectedSequence(e.target.value)} style={{ ...inputStyle, marginBottom: 'var(--space-sm)' }}>
+                        <option value="">Select a sequence...</option>
+                        {sequences.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                       </select>
                       <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
-                        <button className="btn btn-primary btn-sm" onClick={handlePushToCampaign} disabled={!selectedCampaign || pushing}>
+                        <button className="btn btn-primary btn-sm" onClick={handlePushToSequence} disabled={!selectedSequence || pushing}>
                           {pushing ? 'Pushing...' : 'Push'}
                         </button>
-                        <button className="btn btn-secondary btn-sm" onClick={() => setShowCampaignPush(false)}>Cancel</button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => setShowSequencePush(false)}>Cancel</button>
                       </div>
                     </>
                   )}
@@ -650,6 +785,124 @@ export default function LeadDetailModal({ lead: initialLead, onClose, onSave }) 
                   )}
                 </div>
               )}
+            </div>
+
+            {/* MSP Profile card (TASK-19) */}
+            <div style={cardStyle}>
+              <div style={cardHeaderStyle}>MSP Profile</div>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 'var(--space-md)' }}>
+                <div>
+                  <label style={labelStyle}>Estimated Locations Managed</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={estimatedLocations}
+                    onChange={e => setEstimatedLocations(e.target.value)}
+                    placeholder="e.g. 25"
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Hardware Vendors</label>
+                  <input
+                    type="text"
+                    value={hardwareVendors}
+                    onChange={e => setHardwareVendors(e.target.value)}
+                    placeholder="e.g. Ubiquiti, Cisco"
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Geographic Reach</label>
+                  <select value={geographicReach} onChange={e => setGeographicReach(e.target.value)} style={inputStyle}>
+                    <option value="">Select reach...</option>
+                    {GEO_REACH_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Company Size</label>
+                  <select value={companySize} onChange={e => setCompanySize(e.target.value)} style={inputStyle}>
+                    <option value="">Select size...</option>
+                    {COMPANY_SIZE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                  </select>
+                </div>
+                <div style={{ gridColumn: isMobile ? '1' : '1 / -1' }}>
+                  <ToggleField
+                    label="Manages Wi-Fi"
+                    value={managesWifi}
+                    onChange={setManagesWifi}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Post-Discovery card (TASK-20) */}
+            <div style={cardStyle}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-md)' }}>
+                <div style={cardHeaderStyle}>Post-Discovery</div>
+                {discoveryManual && (
+                  <button
+                    onClick={() => setDiscoveryManual(false)}
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid var(--border-default)',
+                      color: 'var(--text-secondary)',
+                      fontSize: '11px',
+                      padding: '3px 8px',
+                      borderRadius: 'var(--radius-sm)',
+                      cursor: 'pointer',
+                    }}
+                    title="Resume auto-calculating discovery score"
+                  >
+                    Reset auto-calc
+                  </button>
+                )}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 'var(--space-md)' }}>
+                <div>
+                  <label style={labelStyle}>Deployment Timeline</label>
+                  <select value={deploymentTimeline} onChange={e => setDeploymentTimeline(e.target.value)} style={inputStyle}>
+                    <option value="">Select timeline...</option>
+                    {DEPLOYMENT_TIMELINE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>
+                    Discovery Score (0-50)
+                    {discoveryManual && (
+                      <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: '6px', textTransform: 'none' }}>
+                        manual
+                      </span>
+                    )}
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={50}
+                    value={discoveryScore}
+                    onChange={e => {
+                      setDiscoveryManual(true);
+                      const v = e.target.value === '' ? 0 : Math.max(0, Math.min(50, Number(e.target.value)));
+                      setDiscoveryScore(v);
+                    }}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <ToggleField
+                    label="Compatible Hardware"
+                    value={compatibleHardware}
+                    onChange={setCompatibleHardware}
+                  />
+                </div>
+                <div>
+                  <ToggleField
+                    label="Decision Maker Engaged"
+                    value={decisionMakerEngaged}
+                    onChange={setDecisionMakerEngaged}
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Pipeline Stage */}
@@ -756,6 +1009,57 @@ function InfoField({ label, value }) {
         {label}
       </div>
       <div style={{ color: 'var(--text-primary)' }}>{value}</div>
+    </div>
+  );
+}
+
+/**
+ * Inline yes/no toggle styled with theme tokens. Mirrors the button-pair
+ * pattern used elsewhere in the modal so we don't introduce a new control idiom.
+ */
+function ToggleField({ label, value, onChange }) {
+  const buttonBase = {
+    flex: 1,
+    padding: '6px 12px',
+    fontSize: '12px',
+    fontWeight: 600,
+    border: '1px solid var(--border-default)',
+    borderRadius: 'var(--radius-sm)',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+  };
+  const activeStyle = {
+    background: 'var(--accent-primary)',
+    borderColor: 'var(--accent-primary)',
+    color: 'white',
+  };
+  const inactiveStyle = {
+    background: 'var(--bg-secondary)',
+    color: 'var(--text-secondary)',
+  };
+
+  return (
+    <div>
+      <label style={{
+        display: 'block', color: 'var(--text-secondary)', fontSize: '11px',
+        fontWeight: 600, marginBottom: '3px', textTransform: 'uppercase',
+      }}>{label}</label>
+      <div style={{ display: 'flex', gap: '6px' }}>
+        <button
+          type="button"
+          onClick={() => onChange(true)}
+          style={{ ...buttonBase, ...(value === true ? activeStyle : inactiveStyle) }}
+        >
+          Yes
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange(false)}
+          style={{ ...buttonBase, ...(value === false ? activeStyle : inactiveStyle) }}
+        >
+          No
+        </button>
+      </div>
     </div>
   );
 }
