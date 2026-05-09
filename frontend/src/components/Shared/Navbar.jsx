@@ -3,7 +3,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { LayoutDashboard, FileText, Calendar, Mail, Settings, LogOut, KeyRound, Menu, X } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { changePassword } from '../../api'
-const fractalsLogo = '/Fractals-white.svg'
+const fractalsLogo = '/Fractals-icon.svg'
 import './Navbar.css'
 
 const allNavItems = [

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import fractalsLogo from '../assets/Fractals-white.svg';
+import fractalsLogo from '../assets/Fractals-icon.svg';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
